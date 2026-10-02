@@ -173,6 +173,7 @@ let LIVE=false;
 
 /* ---------- helpers ---------- */
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const imgUrl=u=>/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/.test(u||'')?u:safeUrl(u);
 const safeUrl=u=>/^https?:\/\//i.test(u||'')?esc(u):'';
 const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const DAY=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -186,7 +187,7 @@ const ICON_IG='<svg width="24" height="24" viewBox="0 0 24 24" fill="none" strok
 const COLS=[[SKY,INK],[INK,PAPER],[RED,PAPER],[PAPER,INK]];
 
 function cover(t,bg,fg,size,img){
-  if(img) return `<img src="${safeUrl(img)}" alt="${esc(t)}" style="aspect-ratio:1/1;width:100%;object-fit:cover;border:2px solid var(--ink);box-shadow:4px 4px 0 var(--ink)" loading="lazy">`;
+  if(img) return `<img src="${imgUrl(img)}" alt="${esc(t)}" style="aspect-ratio:1/1;width:100%;object-fit:cover;border:2px solid var(--ink);box-shadow:4px 4px 0 var(--ink)" loading="lazy">`;
   return `<div class="cover" style="background:${bg};color:${fg}"><div class="stripes"${fg===PAPER?' style="background:repeating-linear-gradient(#F4F0E6 0 4px,transparent 4px 6px)"':''}></div><div class="disp" style="font-size:${size||28}px">${esc(t)}</div></div>`;
 }
 function head(kicker,title,blurb,extra){return `<section class="pagehead"><div class="wrap"><div style="display:flex;align-items:center;gap:16px;margin-bottom:16px"><div class="stripes"></div><p class="mono">${kicker}</p></div><h1 class="disp" style="font-size:clamp(56px,9vw,104px);margin-bottom:16px">${title}</h1><p style="max-width:620px;font-size:19px">${blurb}</p>${extra||''}</div></section>`}
@@ -224,7 +225,7 @@ function gigRow(g,withActs){
 /* ---------- pages ---------- */
 function home(){
   const picks=['das-kapitans','mices','our-souls','the-prods','sprainer','kanfora'].map(s=>BANDS.find(b=>b.slug===s)).filter(Boolean);
-  const tiles=picks.map(b=>`<a class="tile" href="#/band/${esc(b.slug)}"><img src="${safeUrl(bandImg(b))}" alt="${esc(b.name)}"><div class="n">${esc(b.name)}</div></a>`).join('');
+  const tiles=picks.map(b=>`<a class="tile" href="#/band/${esc(b.slug)}"><img src="${imgUrl(bandImg(b))}" alt="${esc(b.name)}"><div class="n">${esc(b.name)}</div></a>`).join('');
   const nx=upcoming()[0];
   const nextCard=nx?`<p class="mono" style="margin-bottom:8px">${fmtLong(nx.event_date)}${nx.venue_name?' &middot; '+esc(nx.venue_name):''}</p><h3 class="disp" style="font-size:34px;margin-bottom:14px">${esc(nx.title)}</h3><p style="margin-bottom:20px">${nx.status==='sold_out'?'Sold out.':nx.price_text?'Tickets '+esc(nx.price_text)+'.':'&nbsp;'}</p><a class="btn small" href="#/gigs">Gig details</a>`
    :`<h3 class="disp" style="font-size:34px;margin-bottom:14px">Nothing announced yet</h3><p style="margin-bottom:20px">New dates land here first. Follow us on Instagram to catch them.</p><a class="btn small" href="#/gigs">Past gigs</a>`;
@@ -267,7 +268,7 @@ function home(){
 }
 
 function roster(){
-  const cards=BANDS.map(b=>`<article class="card band-card"><img src="${safeUrl(bandImg(b))}" alt="${esc(b.name)}" loading="lazy"><div style="padding:16px 16px 18px"><h2 class="disp" style="font-size:25px;margin-bottom:6px">${esc(b.name)}</h2><p class="mono" style="margin-bottom:16px;color:var(--muted)">${esc(b.location)||'&nbsp;'}</p><div style="display:flex;gap:10px;flex-wrap:wrap"><a class="btn small red" href="#/band/${esc(b.slug)}">Meet them</a>${safeUrl(b.bandcamp_url)?`<a class="btn small" href="${safeUrl(b.bandcamp_url)}">Bandcamp &#8599;</a>`:''}</div></div></article>`).join('');
+  const cards=BANDS.map(b=>`<article class="card band-card"><img src="${imgUrl(bandImg(b))}" alt="${esc(b.name)}" loading="lazy"><div style="padding:16px 16px 18px"><h2 class="disp" style="font-size:25px;margin-bottom:6px">${esc(b.name)}</h2><p class="mono" style="margin-bottom:16px;color:var(--muted)">${esc(b.location)||'&nbsp;'}</p><div style="display:flex;gap:10px;flex-wrap:wrap"><a class="btn small red" href="#/band/${esc(b.slug)}">Meet them</a>${safeUrl(b.bandcamp_url)?`<a class="btn small" href="${safeUrl(b.bandcamp_url)}">Bandcamp &#8599;</a>`:''}</div></div></article>`).join('');
   return head(BANDS.length+' bands and counting','The roster',"Your mate's band, your mate's mate's band. Every act on the label, from Peterborough to Varese.")+`<section style="padding:64px 0 88px"><div class="wrap"><div class="g4">${cards}</div></div></section>`;
 }
 
@@ -292,7 +293,7 @@ function band(slug){
 <section class="pagehead" style="padding:40px 0 72px"><div class="wrap">
 <p class="mono" style="margin-bottom:32px"><a href="#/roster">&larr; Back to the roster</a></p>
 <div class="split">
-<div style="position:relative;transform:rotate(-1.5deg)"><div class="tape"></div><img src="${safeUrl(img)}" alt="${esc(b.name)}" style="aspect-ratio:1/1;width:100%;object-fit:cover;border:3px solid var(--ink);box-shadow:8px 8px 0 var(--ink);background:#fff"></div>
+<div style="position:relative;transform:rotate(-1.5deg)"><div class="tape"></div><img src="${imgUrl(img)}" alt="${esc(b.name)}" style="aspect-ratio:1/1;width:100%;object-fit:cover;border:3px solid var(--ink);box-shadow:8px 8px 0 var(--ink);background:#fff"></div>
 <div>
 <p class="mono" style="margin-bottom:12px">${esc(b.location)}</p>
 <h1 class="disp" style="font-size:clamp(48px,8vw,100px);margin-bottom:24px">${esc(b.name)}</h1>
