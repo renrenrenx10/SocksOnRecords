@@ -70,6 +70,7 @@ img{display:block;max-width:100%}
 .gig .date{background:var(--ink);color:var(--paper);padding:24px 12px;text-align:center;display:flex;flex-direction:column;justify-content:center;gap:4px}
 .gig .date .d{font-family:'Anton',Impact,sans-serif;font-size:76px;line-height:1}
 .gig .date .m{font-family:'Anton',Impact,sans-serif;font-size:28px;color:var(--sky);text-transform:uppercase}
+.gig.hasp{grid-template-columns:170px minmax(0,1fr) 250px}.gig .poster{display:block;background:var(--ink);border-left:2px solid var(--ink)}.gig .poster img{width:100%;height:100%;object-fit:cover;display:block}
 .gig .body{padding:28px 32px}
 .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px 28px;margin:18px 0 22px}
 .facts .k{color:var(--red);margin-bottom:2px}
@@ -89,6 +90,7 @@ img{display:block;max-width:100%}
 .grow{grid-template-columns:minmax(0,1fr)}
 }
 @media (max-width:520px){.g6{grid-template-columns:repeat(2,minmax(0,1fr))}.g4{gap:18px}.sec{padding:48px 0}.banner .logo{width:120px}.nav{gap:0 16px}.nav a{font-size:17px}}
+@media (max-width:900px){.gig.hasp{grid-template-columns:minmax(0,1fr)}.gig .poster{border-left:0;border-top:2px solid var(--ink)}.gig .poster img{height:auto;max-height:520px;object-fit:contain}}
 </style>
 </head>
 <body>
@@ -188,6 +190,13 @@ const ICON_CAL='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stro
 const ICON_IG='<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg>';
 const COLS=[[SKY,INK],[INK,PAPER],[RED,PAPER],[PAPER,INK]];
 
+
+/* ---------- Bandcamp player + featured release ---------- */
+const FEAT_DEFAULT={kicker:'Featured \u00b7 Sep 2023',title:'Friends, Volume 3',blurb:"Songs from bands who are with us on Socks On Records, or have worked with us on gigs. Every penny from sales, minus Bandcamp's fees, goes to MIND CPSL.",link_url:'https://socksonrecords.bandcamp.com/album/socks-on-records-and-friends-volume-3',embed_url:'',cover_url:''};
+let FEATURED=null;
+function playerSrc(u){const m=/^https:\/\/bandcamp\.com\/EmbeddedPlayer\/.*?\b(album|track)=(\d+)/.exec(u||'');return m?`https://bandcamp.com/EmbeddedPlayer/${m[1]}=${m[2]}/size=large/bgcol=16130F/linkcol=86AEB9/tracklist=false/artwork=small/transparent=true/`:''}
+function player(u,title){const s=playerSrc(u);return s?`<iframe style="border:0;width:100%;height:120px;display:block;background:#16130F" src="${s}" title="Listen to ${esc(title)} on Bandcamp" seamless loading="lazy"></iframe>`:''}
+
 function cover(t,bg,fg,size,img){
   if(img) return `<img src="${imgUrl(img)}" alt="${esc(t)}" style="aspect-ratio:1/1;width:100%;object-fit:cover;border:2px solid var(--ink);box-shadow:4px 4px 0 var(--ink)" loading="lazy">`;
   return `<div class="cover" style="background:${bg};color:${fg}"><div class="stripes"${fg===PAPER?' style="background:repeating-linear-gradient(#F4F0E6 0 4px,transparent 4px 6px)"':''}></div><div class="disp" style="font-size:${size||28}px">${esc(t)}</div></div>`;
@@ -211,13 +220,14 @@ function gigCard(g){
   else if(g.status==='cancelled') main='<span class="btn off">Cancelled</span>';
   else if(g.status==='free') main='<span class="btn off">Free entry</span>';
   else if(safeUrl(g.ticket_url)) main=`<a class="btn red" href="${safeUrl(g.ticket_url)}">Tickets &#8599;</a>`;
-  return `<article class="card gig" style="margin-bottom:40px">
+  const pu=imgUrl(g.poster_url);
+  return `<article class="card gig${pu?' hasp':''}" style="margin-bottom:40px">
 <div class="date"><span class="m">${MON[d.getMonth()]}</span><span class="d">${String(d.getDate()).padStart(2,'0')}</span><span class="mono" style="color:var(--paper)">${DAY[d.getDay()]} ${d.getFullYear()}</span></div>
 <div class="body"><h3 class="disp" style="font-size:38px">${esc(g.title)}</h3>
 <div class="facts"><div><p class="mono k">When</p><p>${g.time_text?esc(g.time_text):'<span class="ph">[Time]</span>'}</p></div><div><p class="mono k">Where</p><p>${where||'<span class="ph">[Venue]</span>'}</p></div><div><p class="mono k">Tickets</p><p>${g.price_text?esc(g.price_text):'&ndash;'}</p></div></div>
 ${g.acts&&g.acts.length?`<p class="mono" style="color:var(--red);margin-bottom:8px">Line-up</p><div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:26px">${actChips(g.acts)}</div>`:''}
 <div style="display:flex;gap:14px;flex-wrap:wrap">${main}<button class="btn" type="button" data-share>${ICON_SHARE}<span>Share</span></button><a class="btn" download="${esc((g.title||'gig').replace(/[^\w]+/g,'-'))}.ics" href="${ics(g)}">${ICON_CAL}Add to calendar</a></div>
-</div></article>`;
+</div>${pu?`<a class="poster" href="${pu}" target="_blank" rel="noopener" aria-label="View poster for ${esc(g.title)} full size"><img src="${pu}" alt="Poster for ${esc(g.title)}" loading="lazy"></a>`:''}</article>`;
 }
 function gigRow(g,withActs){
   const where=[g.venue_name,g.venue_address].filter(Boolean).map(esc).join(', ');
@@ -277,7 +287,9 @@ function roster(){
 function band(slug){
   const b=BANDS.find(x=>x.slug===slug)||BANDS[0]; const dk=b.slug==='das-kapitans';
   const rels=RELEASES.filter(r=>r.slugs.includes(b.slug));
-  const relHtml=rels.length?`<div class="g4">${rels.map((r,i)=>{const c=COLS[i%4];const u=safeUrl(r.url)||'https://socksonrecords.bandcamp.com/music';return `<div><a href="${u}" style="text-decoration:none">${cover(r.title,c[0],c[1],28,r.cover_url)}</a><p class="mono" style="margin-top:12px">${esc(r.type||'Release')}${r.released_text?' &middot; '+esc(r.released_text):''}</p></div>`}).join('')}</div>`
+  const lp=rels.find(r=>r.embed_url&&playerSrc(r.embed_url));
+  const lpHtml=lp?`<div style="margin-bottom:36px;max-width:640px;border:2px solid var(--ink);box-shadow:5px 5px 0 var(--ink);background:var(--ink)"><p class="mono" style="color:var(--sky);padding:10px 14px 0">Listen &middot; ${esc(lp.title)}</p>${player(lp.embed_url,lp.title)}</div>`:'';
+  const relHtml=rels.length?lpHtml+`<div class="g4">${rels.map((r,i)=>{const c=COLS[i%4];const u=safeUrl(r.url)||'https://socksonrecords.bandcamp.com/music';return `<div><a href="${u}" style="text-decoration:none">${cover(r.title,c[0],c[1],28,r.cover_url)}</a><p class="mono" style="margin-top:12px">${esc(r.type||'Release')}${r.released_text?' &middot; '+esc(r.released_text):''}</p></div>`}).join('')}</div>`
     :`<div class="card" style="padding:28px"><p class="ph">[Releases appear here once added]</p></div>`;
   const gs=GIGS.filter(g=>g.acts&&g.acts.some(x=>x.slug===b.slug)).sort((x,y)=>x.event_date<y.event_date?1:-1);
   const gigHtml=gs.length?`<div class="card">${gs.map(g=>gigRow(g,false)).join('')}</div>`:`<div class="card" style="padding:28px"><p class="ph">[This band's gigs appear here once added]</p></div>`;
@@ -321,16 +333,20 @@ ${up.length?up.map(gigCard).join(''):`<div class="card" style="padding:32px;marg
 </div></section>`;
 }
 
+
+function featured(){
+  const f=Object.assign({},FEAT_DEFAULT,FEATURED||{}); const cu=imgUrl(f.cover_url);
+  const covr=cu?`<img src="${cu}" alt="${esc(f.title)} cover" style="aspect-ratio:1/1;width:100%;object-fit:cover;border:2px solid var(--paper);box-shadow:4px 4px 0 var(--paper)">`
+    :`<div class="cover" style="background:var(--sky);color:var(--ink);box-shadow:4px 4px 0 var(--paper);border-color:var(--paper)"><div class="stripes"></div><div class="disp" style="font-size:30px">${esc(f.title)}</div></div>`;
+  const pl=player(f.embed_url,f.title);
+  const href=safeUrl(f.link_url)||'https://socksonrecords.bandcamp.com/music';
+  return `<article class="feat"><div>${covr}</div><div>${f.kicker?`<p class="mono" style="color:var(--sky);margin-bottom:10px">${esc(f.kicker)}</p>`:''}<h2 class="disp" style="font-size:46px;margin-bottom:14px">${esc(f.title)}</h2>${f.blurb?`<p style="margin-bottom:22px;max-width:560px;white-space:pre-line">${esc(f.blurb)}</p>`:''}${pl?`<div style="margin-bottom:22px;border:2px solid var(--sky)">${pl}</div>`:''}<a class="btn red" href="${href}">Listen on Bandcamp &#8599;</a></div></article>`;
+}
+
 function releases(){
   const cards=RELEASES.map((r,i)=>{const c=COLS[i%4];const u=safeUrl(r.url)||'https://socksonrecords.bandcamp.com/music';return `<article><a href="${u}" style="text-decoration:none">${cover(r.title,c[0],c[1],28,r.cover_url)}</a><h3 class="disp" style="font-size:22px;margin:18px 0 6px">${esc(r.title)}</h3><p class="mono" style="margin-bottom:4px">${esc(r.artist)}</p><p class="mono" style="color:var(--muted);margin-bottom:14px">${r.released_text?esc(r.released_text):'[Date]'}</p><a class="btn small" href="${u}">Listen &#8599;</a></article>`}).join('');
   return head('Records, compilations &amp; live albums','Releases',"Everything we've put out. Listen and buy on Bandcamp, pay what you like, support the bands.")+`
-<section style="padding:64px 0 24px"><div class="wrap"><article class="feat">
-<div class="cover" style="background:var(--sky);color:var(--ink);box-shadow:4px 4px 0 var(--paper);border-color:var(--paper)"><div class="stripes"></div><div class="disp" style="font-size:30px">Socks On Records &amp; Friends Vol 3</div></div>
-<div><p class="mono" style="color:var(--sky);margin-bottom:10px">Featured &middot; Sep 2023</p><h2 class="disp" style="font-size:46px;margin-bottom:14px">Friends, Volume 3</h2>
-<p style="margin-bottom:22px;max-width:560px">Songs from bands who are with us on Socks On Records, or have worked with us on gigs. Every penny from sales, minus Bandcamp's fees, goes to MIND CPSL.</p>
-<div class="player mono">Bandcamp player embeds here</div>
-<div style="margin-top:22px"><a class="btn red" href="https://socksonrecords.bandcamp.com/album/socks-on-records-and-friends-volume-3">Listen on Bandcamp &#8599;</a></div></div>
-</article></div></section>
+<section style="padding:64px 0 24px"><div class="wrap">${featured()}</div></section>
 <section style="padding:48px 0 96px"><div class="wrap">
 <div style="display:flex;align-items:center;gap:16px;margin-bottom:32px"><h2 class="disp" style="font-size:44px">All releases</h2><div class="stripes"></div></div>
 <div class="g4">${cards}</div>
@@ -402,13 +418,15 @@ async function loadLive(){
   try{
     const res=await Promise.all([
       sb('bands?select=slug,name,location,bio,image_url,bandcamp_image_url,bandcamp_url,instagram_url,facebook_url,spotify_url,youtube_url,website_url&published=eq.true&order=sort_order.asc,name.asc'),
-      sb('gigs?select=id,title,series,event_date,time_text,venue_name,venue_address,price_text,ticket_url,status,gig_acts(position,act_name,bands(slug,name))&order=event_date.desc'),
-      sb('releases?select=id,title,artist_text,type,released_text,released_date,bandcamp_url,cover_url,label,release_bands(bands(slug))&order=released_date.desc.nullslast,title.asc')
+      sb('gigs?select=id,title,series,event_date,time_text,venue_name,venue_address,price_text,ticket_url,status,poster_url,gig_acts(position,act_name,bands(slug,name))&order=event_date.desc').catch(()=>sb('gigs?select=id,title,series,event_date,time_text,venue_name,venue_address,price_text,ticket_url,status,gig_acts(position,act_name,bands(slug,name))&order=event_date.desc')),
+      sb('releases?select=id,title,artist_text,type,released_text,released_date,bandcamp_url,cover_url,label,embed_url,release_bands(bands(slug))&order=released_date.desc.nullslast,title.asc').catch(()=>sb('releases?select=id,title,artist_text,type,released_text,released_date,bandcamp_url,cover_url,label,release_bands(bands(slug))&order=released_date.desc.nullslast,title.asc')),
+      sb('site_settings?select=value&key=eq.featured_release').catch(()=>[])
     ]);
     if(!res[0].length) throw new Error('bands table is empty');
     BANDS=res[0];
     GIGS=res[1].map(g=>Object.assign({},g,{acts:(g.gig_acts||[]).slice().sort((x,y)=>x.position-y.position).map(x=>({slug:x.bands?x.bands.slug:null,name:x.bands?x.bands.name:x.act_name}))}));
-    RELEASES=res[2].map(r=>({title:r.title,artist:r.artist_text||'',type:r.type,released_text:r.released_text,url:r.bandcamp_url,cover_url:r.cover_url,slugs:(r.release_bands||[]).map(x=>x.bands&&x.bands.slug).filter(Boolean)}));
+    RELEASES=res[2].map(r=>({title:r.title,artist:r.artist_text||'',type:r.type,released_text:r.released_text,url:r.bandcamp_url,cover_url:r.cover_url,embed_url:r.embed_url,slugs:(r.release_bands||[]).map(x=>x.bands&&x.bands.slug).filter(Boolean)}));
+    FEATURED=(res[3]&&res[3][0]&&res[3][0].value)||null;
     LIVE=true;
     if(rb) rb.textContent='Draft design preview \u00b7 live data from Supabase \u00b7 anything in [brackets] is still to be filled in';
     route();

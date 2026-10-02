@@ -80,7 +80,7 @@ const today=()=>{const n=new Date();return n.getFullYear()+'-'+String(n.getMonth
 const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const fmt=s=>{if(!s)return '';const p=s.split('-').map(Number);return p[2]+' '+MON[p[1]-1]+' '+p[0]};
 
-let S={user:null,profile:null,admin:false,mine:[],bands:[],gigs:[],releases:[],people:[],members:[],notes:[],tab:'bands',edit:null,ready:false};
+let S={user:null,profile:null,admin:false,mine:[],bands:[],gigs:[],releases:[],people:[],members:[],notes:[],settings:null,tab:'bands',edit:null,ready:false};
 
 let tt;
 function toast(m,bad){const t=$('#toast');t.textContent=m;t.className=bad?'bad':'';t.style.display='block';clearTimeout(tt);tt=setTimeout(()=>t.style.display='none',bad?7000:2800)}
@@ -98,6 +98,8 @@ async function load(){
     S.people=ck(await db.from('profiles').select('*').order('email'));
     S.members=ck(await db.from('band_members').select('*'));
     S.notes=ck(await db.from('band_notes').select('*'));
+    const st=await db.from('site_settings').select('*').eq('key','featured_release').maybeSingle();
+    S.settings=st.error?null:(st.data||{value:{}});   // null = the 03 SQL hasn't been run yet
   }
   S.ready=true;
 }
@@ -123,13 +125,14 @@ function render(){
   if(!S.ready){app.innerHTML='<p class="mono">Loading…</p>';return}
   if(!S.profile){app.innerHTML=`<div class="card"><h2 class="disp" style="margin-bottom:10px">Something's off</h2><p>You're signed in, but there's no profile for you yet. Ask Roy to check your invite.</p></div>`;return}
   if(!S.admin&&!S.mine.length){app.innerHTML=`<div class="card"><h2 class="disp" style="margin-bottom:10px">You're in</h2><p>You're signed in, but you're not linked to a band yet. Ask Roy to link your login to your band and you'll be able to edit it here.</p></div>${account()}`;return}
-  const tabs=S.admin?[['bands','Bands'],['gigs','Gigs'],['releases','Releases'],['people','People']]:[['bands','My band'],['gigs','Gigs']];
+  const tabs=S.admin?[['bands','Bands'],['gigs','Gigs'],['releases','Releases'],['featured','Featured'],['people','People']]:[['bands','My band'],['gigs','Gigs']];
   if(!tabs.some(t=>t[0]===S.tab))S.tab='bands';
   const tb=`<div class="tabs" role="tablist">${tabs.map(t=>`<button role="tab" class="${S.tab===t[0]?'on':''}" data-act="tab" data-tab="${t[0]}">${t[1]}</button>`).join('')}</div>`;
   let body='';
   if(S.tab==='bands')body=S.edit?bandForm():bandList();
   else if(S.tab==='gigs')body=S.edit?gigForm():gigList();
   else if(S.tab==='releases')body=S.edit?releaseForm():releaseList();
+  else if(S.tab==='featured')body=featuredView();
   else if(S.tab==='people')body=peopleView();
   app.innerHTML=tb+body+(S.edit?'':account());
   window.scrollTo(0,0);
@@ -165,11 +168,11 @@ function bandForm(){
   <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn red" type="submit">Save</button><button class="btn" type="button" data-act="cancel">Cancel</button>${S.admin&&!isNew?`<button class="btn" type="button" data-act="delBand" data-id="${b.id}" style="margin-left:auto">Delete band</button>`:''}</div>
   </form>`;
 }
-async function shrink(file){
+async function shrink(file,max=1000){
   const url=URL.createObjectURL(file);
   try{
     const img=await new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=()=>no(new Error("Couldn't read that image"));i.src=url});
-    const k=Math.min(1,1000/Math.max(img.width,img.height));
+    const k=Math.min(1,max/Math.max(img.width,img.height));
     const c=document.createElement('canvas');c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);
     const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(img,0,0,c.width,c.height);
     return await new Promise((ok,no)=>c.toBlob(b=>b?ok(b):no(new Error('Image conversion failed')),'image/jpeg',.85));
@@ -221,7 +224,7 @@ function gigForm(){
   const isNew=S.edit==='new'||(S.edit&&S.edit.copy);
   const src=S.edit&&S.edit.copy?S.gigs.find(g=>g.id===S.edit.copy):(isNew?null:S.gigs.find(g=>g.id===S.edit));
   if(!isNew&&!src){S.edit=null;return gigList()}
-  const g=src?Object.assign({},src,S.edit.copy?{event_date:'',id:null}:{}):{status:'on_sale'};
+  const g=src?Object.assign({},src,S.edit.copy?{event_date:'',id:null,poster_url:null}:{}):{status:'on_sale'};
   const names=S.bands.map(b=>esc(b.name)).join(', ');
   return `<form class="card" data-form="gig" data-id="${isNew?'':g.id}">
   <h2 class="disp" style="margin-bottom:18px">${isNew?(S.edit.copy?'Copy of a gig':'Add a gig'):'Edit gig'}</h2>
@@ -230,6 +233,7 @@ function gigForm(){
   ${F('Venue','venue_name',g.venue_name,{ph:'The Ostrich'})}${F('Venue address','venue_address',g.venue_address)}
   ${F('Price','price_text',g.price_text,{ph:'£6 adv / £8 door'})}${F('Ticket link','ticket_url',g.ticket_url,{type:'url',ph:'https://…'})}</div>
   <div class="f"><label for="status">Status</label><select id="status" name="status">${STATUS.map(s=>`<option value="${s[0]}"${g.status===s[0]?' selected':''}>${s[1]}</option>`).join('')}</select></div>
+  <div class="f"><span class="lab">Poster</span>${g.poster_url?`<img class="pre" style="width:auto;max-width:220px;height:auto" src="${esc(g.poster_url)}" alt=""><label class="chk"><input type="checkbox" name="rmposter"> Remove this poster</label>`:''}<input type="file" name="poster" accept="image/*"><small>A JPG or PNG of the gig poster. It shows on the Gigs page and people can tap it to see it full size.</small></div>
   ${F('Line-up, one act per line, in running order','lineup',lineupText(g),{area:1,rows:6,hint:'Type a roster band exactly as named and it links to their page. Anything else is shown as a guest act. Roster: '+names})}
   ${F('Extra notes (optional)','notes',g.notes,{area:1,rows:3})}
   <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn red" type="submit">Save gig</button><button class="btn" type="button" data-act="cancel">Cancel</button>${!isNew?`<button class="btn" type="button" data-act="delGig" data-id="${g.id}" style="margin-left:auto">Delete gig</button>`:''}</div>
@@ -241,6 +245,11 @@ async function saveGig(form){
     venue_name:nul(d.get('venue_name')),venue_address:nul(d.get('venue_address')),price_text:nul(d.get('price_text')),
     ticket_url:link(d.get('ticket_url')),status:d.get('status'),notes:nul(d.get('notes'))};
   if(!row.title||!row.event_date)throw new Error('A gig needs a title and a date');
+  const pf=form.poster&&form.poster.files[0];
+  if(pf){const blob=await shrink(pf,1400);const path=S.user.id+'/'+Date.now()+'.jpg';
+    ck(await db.storage.from('gig-posters').upload(path,blob,{contentType:'image/jpeg'}));
+    row.poster_url=db.storage.from('gig-posters').getPublicUrl(path).data.publicUrl}
+  else if(d.has('rmposter'))row.poster_url=null;
   let gid=id;
   if(!id){row.created_by=S.user.id;gid=ck(await db.from('gigs').insert(row).select('id').single()).id}
   else ck(await db.from('gigs').update(row).eq('id',id));
@@ -255,6 +264,7 @@ function releaseList(){
   return `<div class="bar"><h2 class="disp">Releases</h2><button class="btn red" data-act="new">+ Add a release</button></div>
   ${S.releases.length?S.releases.map(r=>`<div class="row"><div><div class="t">${esc(r.title)}</div><div class="s">${esc(r.artist_text||'')}${r.released_text?' · '+esc(r.released_text):''}</div></div><div class="a"><button class="btn sm" data-act="edit" data-id="${r.id}">Edit</button></div></div>`).join(''):'<p>No releases yet.</p>'}`;
 }
+const hasRelCols=()=>S.releases.length>0&&('embed_url' in S.releases[0]);
 function releaseForm(){
   const isNew=S.edit==='new';
   const r=isNew?{release_bands:[]}:S.releases.find(x=>x.id===S.edit);
@@ -267,6 +277,7 @@ function releaseForm(){
   ${F('Type','type',r.type,{ph:'album, EP, compilation, live'})}${F('Released (as shown)','released_text',r.released_text,{ph:'Sep 2023'})}
   ${F('Release date (for ordering)','released_date',r.released_date,{type:'date'})}${F('Label','label',r.label,{ph:'Socks On Records'})}
   ${F('Bandcamp link','bandcamp_url',r.bandcamp_url,{type:'url',ph:'https://…'})}${F('Cover image link','cover_url',r.cover_url,{type:'url',ph:'https://…'})}</div>
+  ${hasRelCols()?`${F('Bandcamp player (optional)','embed_url',r.embed_url,{area:1,rows:2,hint:'Paste the Bandcamp embed code. Shows a player on the band page.'})}${F('About this release (optional)','description',r.description,{area:1,rows:4})}`:''}
   <div class="f"><span class="lab">Which roster bands are on it?</span><div class="checks">${bl.map(b=>`<label class="chk"><input type="checkbox" name="rb" value="${b.id}"${on.has(b.id)?' checked':''}> ${esc(b.name)}</label>`).join('')}</div></div>
   <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn red" type="submit">Save release</button><button class="btn" type="button" data-act="cancel">Cancel</button>${!isNew?`<button class="btn" type="button" data-act="delRelease" data-id="${r.id}" style="margin-left:auto">Delete release</button>`:''}</div>
   </form>`;
@@ -276,12 +287,46 @@ async function saveRelease(form){
   const row={title:nul(d.get('title')),artist_text:nul(d.get('artist_text')),type:nul(d.get('type')),released_text:nul(d.get('released_text')),
     released_date:nul(d.get('released_date')),label:nul(d.get('label')),bandcamp_url:link(d.get('bandcamp_url')),cover_url:link(d.get('cover_url'))};
   if(!row.title)throw new Error('A release needs a title');
+  if(form.embed_url){row.embed_url=bcEmbed(form.embed_url.value);row.description=nul(form.description.value)}
   let rid=id;
   if(!id)rid=ck(await db.from('releases').insert(row).select('id').single()).id;
   else ck(await db.from('releases').update(row).eq('id',id));
   ck(await db.from('release_bands').delete().eq('release_id',rid));
   const links=d.getAll('rb').map(b=>({release_id:rid,band_id:b}));
   if(links.length)ck(await db.from('release_bands').insert(links));
+}
+
+/* ----- featured release box (admin) ----- */
+const FEAT_DEFAULT={kicker:'Featured · Sep 2023',title:'Friends, Volume 3',blurb:"Songs from bands who are with us on Socks On Records, or have worked with us on gigs. Every penny from sales, minus Bandcamp's fees, goes to MIND CPSL.",link_url:'https://socksonrecords.bandcamp.com/album/socks-on-records-and-friends-volume-3',embed_url:'',cover_url:''};
+function bcEmbed(v){
+  v=nul(v);if(!v)return null;
+  const m=v.match(/src=["']([^"']+)["']/i),u=(m?m[1]:v).trim();
+  const id=u.match(/^https:\/\/bandcamp\.com\/EmbeddedPlayer\/.*?\b(album|track)=(\d+)/);
+  if(!id)throw new Error("That doesn't look like a Bandcamp player. On the Bandcamp release page choose Share / Embed, pick the album player, then paste the whole code (or just the link inside src=\"...\").");
+  return 'https://bandcamp.com/EmbeddedPlayer/'+id[1]+'='+id[2]+'/';
+}
+const playerSrc=u=>{const m=/(album|track)=(\d+)/.exec(u||'');return m?`https://bandcamp.com/EmbeddedPlayer/${m[1]}=${m[2]}/size=large/bgcol=16130F/linkcol=86AEB9/tracklist=false/artwork=small/transparent=true/`:''};
+const previewHtml=u=>{try{const e=bcEmbed(u);return e?`<iframe style="border:0;width:100%;max-width:480px;height:120px;display:block;background:#16130F" src="${playerSrc(e)}" title="Player preview" seamless></iframe>`:'<small>No player yet. Paste an embed code above to add one.</small>'}catch(x){return '<small style="color:var(--red)">'+esc(x.message)+'</small>'}};
+function featuredView(){
+  if(!S.settings)return `<div class="note"><strong>One setup step first.</strong> Run <code>03-featured-and-crawl.sql</code> (in the supabase folder) in the Supabase SQL Editor, then reload this page.</div>`;
+  const f=Object.assign({},FEAT_DEFAULT,S.settings.value||{});
+  const rels=S.releases.filter(r=>r.bandcamp_url||r.embed_url);
+  return `<div class="bar"><h2 class="disp">Featured release</h2></div>
+  <p class="note">This is the big box at the top of the Releases page. Pick a release to fill it in, or type your own, then paste the Bandcamp embed code to add the player.</p>
+  <form class="card" data-form="featured">
+  <div class="f"><label for="pick">Start from a release (optional)</label><select id="pick" name="pick" data-act="pickRelease"><option value="">Choose…</option>${rels.map(r=>`<option value="${r.id}">${esc(r.title)}${r.artist_text?' · '+esc(r.artist_text):''}</option>`).join('')}</select></div>
+  <div class="g2">${F('Small heading','kicker',f.kicker,{ph:'Featured · Sep 2023'})}${F('Title','title',f.title,{req:1})}</div>
+  ${F('Blurb','blurb',f.blurb,{area:1,rows:4})}
+  <div class="g2">${F('Bandcamp link (for the button)','link_url',f.link_url,{type:'url',ph:'https://…'})}${F('Cover image link (optional)','cover_url',f.cover_url,{type:'url',ph:'https://…'})}</div>
+  ${F('Bandcamp player','embed_url',f.embed_url,{area:1,rows:3,hint:'On the release page on Bandcamp: Share / Embed, choose the album player, copy the code and paste it here. It gets restyled to match the site.'})}
+  <div class="f"><span class="lab">Preview</span><div id="fprev">${previewHtml(f.embed_url)}</div></div>
+  <button class="btn red" type="submit">Save featured release</button></form>`;
+}
+async function saveFeatured(form){
+  const d=new FormData(form);
+  const v={kicker:nul(d.get('kicker')),title:nul(d.get('title')),blurb:nul(d.get('blurb')),link_url:link(d.get('link_url')),cover_url:link(d.get('cover_url')),embed_url:bcEmbed(d.get('embed_url'))};
+  if(!v.title)throw new Error('The featured release needs a title');
+  ck(await db.from('site_settings').upsert({key:'featured_release',value:v,updated_at:new Date().toISOString()}));
 }
 
 /* ----- people (admin) ----- */
@@ -317,8 +362,15 @@ app.addEventListener('click',e=>{
     else if(a==='rmMember'){ck(await db.from('band_members').delete().eq('band_id',t.dataset.b).eq('user_id',t.dataset.u));await reload();toast('Removed')}
   });
 });
+app.addEventListener('input',e=>{if(e.target.name==='embed_url'&&e.target.closest('[data-form=featured]'))$('#fprev').innerHTML=previewHtml(e.target.value)});
 app.addEventListener('change',e=>{
   const t=e.target;
+  if(t.dataset&&t.dataset.act==='pickRelease'){
+    const r=S.releases.find(x=>x.id===t.value),f=t.closest('form');if(!r)return;
+    f.title.value=r.title||'';f.kicker.value='Featured'+(r.released_text?' · '+r.released_text:'');
+    f.blurb.value=r.description||f.blurb.value;f.link_url.value=r.bandcamp_url||'';f.cover_url.value=r.cover_url||'';
+    f.embed_url.value=r.embed_url||'';$('#fprev').innerHTML=previewHtml(r.embed_url);
+  }
   if(t.dataset&&t.dataset.act==='toggleAdmin')run(async()=>{
     ck(await db.from('profiles').update({is_admin:t.checked}).eq('id',t.dataset.id));await reload();toast(t.checked?'Now an admin':'No longer an admin');
   });
@@ -342,6 +394,7 @@ app.addEventListener('submit',e=>{
         if(r.error)throw r.error;f.reset();toast('Password saved');
       }else if(kind==='band'){await saveBand(f);S.edit=null;await reload();toast('Saved. The site shows it straight away.')}
       else if(kind==='gig'){await saveGig(f);S.edit=null;await reload();toast('Gig saved')}
+      else if(kind==='featured'){await saveFeatured(f);await reload();toast('Saved. The Releases page shows it straight away.')}
       else if(kind==='release'){await saveRelease(f);S.edit=null;await reload();toast('Release saved')}
     }finally{if(btn&&document.body.contains(btn))btn.disabled=false}
   });
