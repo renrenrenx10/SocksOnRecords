@@ -328,10 +328,12 @@ def import_browser_json(path, bands_csv, out_dir, sql_path):
         rec = json.loads(line)
         slug, origin, d = rec["slug"], rec["origin"], rec["d"]
         b = d["b"]
+        is_label = slug == "label"
         img = _untok(b.get("image_url"))
         if img and re.search(r"/img/a\d+_", img):
             img = None  # that is album art, not a band photo
-        band_rows.append({
+        if not is_label:
+          band_rows.append({
             "slug": slug, "name": _untok(b.get("name")), "location": _untok(b.get("location")),
             "bio": _clean_bio(b.get("bio")), "image_url": img,
             "instagram_url": _clean_insta(_untok(b.get("instagram_url"))),
@@ -346,9 +348,19 @@ def import_browser_json(path, bands_csv, out_dir, sql_path):
                 continue
             iso, text = _date(dt)
             artist = _untok(artist) or bname
+            if artist == "O":
+                artist = "O (My Name Is O)"
+            if artist == "O featuring The Dan The D":
+                slugs_extra = ["my-name-is-o", "dan-the-d"]
+            else:
+                slugs_extra = []
             url = href if href.startswith("http") else origin + href
             key = (title.strip().lower(), iso)
-            slugs = [slug]
+            slugs = [] if is_label else [slug]
+            for s2 in slugs_extra:
+                slugs.append(s2)
+            if artist.startswith("O (My"):
+                slugs.append("my-name-is-o")
             for nm in re.split(r"\s*(?:/|&| x | and )\s*", artist):
                 s2 = name_to_slug.get(nm.strip().lower())
                 if s2 and s2 not in slugs:
@@ -359,7 +371,10 @@ def import_browser_json(path, bands_csv, out_dir, sql_path):
                     if s2 not in m["band_slugs"]:
                         m["band_slugs"].append(s2)
                 if artist.lower() not in m["artist"].lower():
-                    m["artist"] += " / " + artist
+                    if m["artist"].lower() in artist.lower():
+                        m["artist"] = artist
+                    else:
+                        m["artist"] += " / " + artist
                 continue
             artid = str(art or "")
             cover = ("https://f4.bcbits.com/img/a%s_5.jpg" % artid[1:].zfill(10)) if artid.startswith("a") else None
@@ -368,7 +383,7 @@ def import_browser_json(path, bands_csv, out_dir, sql_path):
                 "released_text": text, "released_date": iso, "url": url, "cover_url": cover,
                 "embed_url": "https://bandcamp.com/EmbeddedPlayer/%s=%s/" % ("album" if kind == "a" else "track", rid),
                 "about": (_untok(about) or "").strip() or None, "tracks": None, "band_slugs": slugs}
-    releases = sorted(merged.values(), key=lambda x: (x["band_slugs"][0], x["released_date"] or ""), reverse=False)
+    releases = sorted(merged.values(), key=lambda x: ((x["band_slugs"] or ["~"])[0], x["released_date"] or ""), reverse=False)
     os.makedirs(out_dir, exist_ok=True)
     with open(os.path.join(out_dir, "bands.csv"), "w", encoding="utf-8-sig", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(band_rows[0].keys()))
