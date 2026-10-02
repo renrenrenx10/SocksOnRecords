@@ -57,7 +57,10 @@ img{display:block;max-width:100%}
 .ea{background:var(--ink);color:var(--paper);padding:80px 0}
 .pagehead{background:var(--sky);border-bottom:5px solid var(--ink);padding:56px 0 48px}
 .band-card{overflow:hidden}
-.band-card img{aspect-ratio:1/1;width:100%;object-fit:cover;border-bottom:2px solid var(--ink)}
+.band-card img{aspect-ratio:1/1;width:100%;object-fit:cover;border-bottom:2px solid var(--ink);display:block}
+.band-card .imglink{display:block}
+.band-card .btns{display:flex;gap:6px;flex-wrap:nowrap}
+.band-card .btn{min-height:38px;font-size:13px;padding:0 9px;gap:4px;box-shadow:2px 2px 0 var(--ink);white-space:nowrap;flex:0 1 auto;min-width:0}
 .split{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:56px;align-items:center}
 .split.rev{grid-template-columns:minmax(0,7fr) minmax(0,5fr);align-items:start}
 .cover{aspect-ratio:1/1;border:2px solid var(--ink);display:flex;flex-direction:column;justify-content:space-between;padding:16px;box-shadow:4px 4px 0 var(--ink)}
@@ -94,7 +97,6 @@ img{display:block;max-width:100%}
 </style>
 </head>
 <body>
-<div id="ribbon" class="ribbon mono">Draft design preview &middot; anything in [brackets] is still to be filled in</div>
 
 <header class="banner"><div class="wrap">
 <a class="logo" href="#/" aria-label="Socks On Records home"><img data-logo alt="Socks On Records"></a>
@@ -231,7 +233,7 @@ ${g.acts&&g.acts.length?`<p class="mono" style="color:var(--red);margin-bottom:8
 }
 function gigRow(g,withActs){
   const where=[g.venue_name,g.venue_address].filter(Boolean).map(esc).join(', ');
-  return `<div class="grow" style="grid-template-columns:150px minmax(0,1fr);align-items:start;padding:22px 28px"><p class="mono">${fmtLong(g.event_date)}</p><div><h3 class="disp" style="font-size:28px;margin-bottom:6px">${esc(g.title)}</h3><p class="mono" style="margin-bottom:${withActs?8:0}px">${where}${g.status==='sold_out'?' &middot; Sold out':''}</p>${withActs&&g.acts&&g.acts.length?`<p>${g.acts.map(x=>esc(x.name)).join(', ')}</p>`:''}</div></div>`;
+  return `<div class="grow" style="align-items:start;padding:22px 28px"><p class="mono">${fmtLong(g.event_date)}</p><div><h3 class="disp" style="font-size:28px;margin-bottom:6px">${esc(g.title)}</h3><p class="mono" style="margin-bottom:${withActs?8:0}px">${where}${g.status==='sold_out'?' &middot; Sold out':''}</p>${withActs&&g.acts&&g.acts.length?`<p>${g.acts.map(x=>esc(x.name)).join(', ')}</p>`:''}</div></div>`;
 }
 
 /* ---------- pages ---------- */
@@ -280,10 +282,11 @@ function home(){
 }
 
 function roster(){
-  const cards=BANDS.map(b=>`<article class="card band-card"><img src="${imgUrl(bandImg(b))}" alt="${esc(b.name)}" loading="lazy"><div style="padding:16px 16px 18px"><h2 class="disp" style="font-size:25px;margin-bottom:6px">${esc(b.name)}</h2><p class="mono" style="margin-bottom:16px;color:var(--muted)">${esc(b.location)||'&nbsp;'}</p><div style="display:flex;gap:10px;flex-wrap:wrap"><a class="btn small red" href="#/band/${esc(b.slug)}">Meet them</a>${safeUrl(b.bandcamp_url)?`<a class="btn small" href="${safeUrl(b.bandcamp_url)}">Bandcamp &#8599;</a>`:''}</div></div></article>`).join('');
+  const cards=BANDS.map(b=>`<article class="card band-card"><a class="imglink" href="#/band/${esc(b.slug)}" aria-label="${esc(b.name)}"><img src="${imgUrl(bandImg(b))}" alt="${esc(b.name)}" loading="lazy"></a><div style="padding:16px 16px 18px"><h2 class="disp" style="font-size:25px;margin-bottom:6px">${esc(b.name)}</h2><p class="mono" style="margin-bottom:16px;color:var(--muted)">${esc(b.location)||'&nbsp;'}</p><div class="btns"><a class="btn small red" href="#/band/${esc(b.slug)}">Meet them</a>${safeUrl(b.bandcamp_url)?`<a class="btn small" href="${safeUrl(b.bandcamp_url)}">Bandcamp &#8599;</a>`:''}</div></div></article>`).join('');
   return head(BANDS.length+' bands and counting','The roster',"Your mate's band, your mate's mate's band. Every act on the label, from Peterborough to Varese.")+`<section style="padding:64px 0 88px"><div class="wrap"><div class="g4">${cards}</div></div></section>`;
 }
 
+function merchUrl(b){const m=safeUrl(b.merch_url);if(m)return m;const u=safeUrl(b.bandcamp_url);if(!u)return null;try{return new URL(u).origin+'/merch'}catch(e){return null}}
 function band(slug){
   const b=BANDS.find(x=>x.slug===slug)||BANDS[0]; const dk=b.slug==='das-kapitans';
   const rels=RELEASES.filter(r=>r.slugs.includes(b.slug));
@@ -293,11 +296,12 @@ function band(slug){
     :`<div class="card" style="padding:28px"><p class="ph">[Releases appear here once added]</p></div>`;
   const gs=GIGS.filter(g=>g.acts&&g.acts.some(x=>x.slug===b.slug)).sort((x,y)=>x.event_date<y.event_date?1:-1);
   const gigHtml=gs.length?`<div class="card">${gs.map(g=>gigRow(g,false)).join('')}</div>`:`<div class="card" style="padding:28px"><p class="ph">[This band's gigs appear here once added]</p></div>`;
+  const mu=merchUrl(b);
   const merch=dk?`<div class="g3">
 <article class="card" style="padding:20px"><div class="cover" style="aspect-ratio:4/3;background:${SKY};margin-bottom:18px"><span class="mono ph" style="align-self:flex-start">[Product photo]</span><div class="disp" style="font-size:26px">Get Up EP CD</div></div><div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><p class="disp" style="font-size:28px">&pound;5.00</p><a class="btn small red" href="https://socksonrecords.bigcartel.com/product/das-kapitans-get-up-ep-cd">Buy &#8599;</a></div></article>
 <article class="card" style="padding:20px"><div class="cover" style="aspect-ratio:4/3;background:${PAPER};margin-bottom:18px"><span class="mono ph" style="align-self:flex-start">[Product photo]</span><div class="disp" style="font-size:26px">Das Kapitans Logo T-Shirt</div></div><div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><p class="disp" style="font-size:28px">&pound;16.00</p><a class="btn small red" href="https://socksonrecords.bandcamp.com/merch">Buy &#8599;</a></div></article>
 <article class="card" style="padding:20px"><div class="cover" style="aspect-ratio:4/3;background:${RED};color:${PAPER};margin-bottom:18px"><span class="mono" style="align-self:flex-start;background:${PAPER};color:${INK};padding:0 4px">[Product photo]</span><div class="disp" style="font-size:26px">Camp Kapitans Shirt</div></div><div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><p class="disp" style="font-size:28px">&pound;15.50</p><a class="btn small red" href="https://socksonrecords.bandcamp.com/merch">Buy &#8599;</a></div></article></div>`
-    :`<div class="card" style="padding:28px"><p class="ph">[Band merch links appear here]</p></div>`;
+    :(mu?`<div class="card" style="padding:28px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap"><p style="max-width:460px">Shirts, music and other bits from ${esc(b.name)}, on Bandcamp.</p><a class="btn red" href="${mu}">Merch &#8599;</a></div>`:`<div class="card" style="padding:28px"><p class="ph">[Band merch links appear here]</p></div>`);
   const L=[['bandcamp_url','Bandcamp'],['spotify_url','Spotify'],['instagram_url','Instagram'],['facebook_url','Facebook'],['youtube_url','YouTube'],['website_url','Website']];
   let btns=L.filter(x=>safeUrl(b[x[0]])).map((x,i)=>`<a class="btn${i===0?' red':''}" href="${safeUrl(b[x[0]])}">${x[1]} &#8599;</a>`).join('');
   if(!safeUrl(b.spotify_url)) btns+='<span class="btn off">Spotify [link]</span>';
@@ -428,7 +432,7 @@ async function loadLive(){
   const rb=document.getElementById('ribbon');
   try{
     const res=await Promise.all([
-      sb('bands?select=slug,name,location,bio,image_url,bandcamp_image_url,bandcamp_url,instagram_url,facebook_url,spotify_url,youtube_url,website_url&published=eq.true&order=sort_order.asc,name.asc'),
+      sb('bands?select=slug,name,location,bio,image_url,bandcamp_image_url,bandcamp_url,instagram_url,facebook_url,spotify_url,youtube_url,website_url,merch_url&published=eq.true&order=sort_order.asc,name.asc').catch(()=>sb('bands?select=slug,name,location,bio,image_url,bandcamp_image_url,bandcamp_url,instagram_url,facebook_url,spotify_url,youtube_url,website_url&published=eq.true&order=sort_order.asc,name.asc')),
       sb('gigs?select=id,title,series,event_date,time_text,venue_name,venue_address,price_text,ticket_url,status,poster_url,gig_acts(position,act_name,bands(slug,name))&order=event_date.desc').catch(()=>sb('gigs?select=id,title,series,event_date,time_text,venue_name,venue_address,price_text,ticket_url,status,gig_acts(position,act_name,bands(slug,name))&order=event_date.desc')),
       sb('releases?select=id,title,artist_text,type,released_text,released_date,bandcamp_url,cover_url,label,embed_url,release_bands(bands(slug))&order=released_date.desc.nullslast,title.asc').catch(()=>sb('releases?select=id,title,artist_text,type,released_text,released_date,bandcamp_url,cover_url,label,release_bands(bands(slug))&order=released_date.desc.nullslast,title.asc')),
       sb('site_settings?select=value&key=eq.featured_release').catch(()=>[])

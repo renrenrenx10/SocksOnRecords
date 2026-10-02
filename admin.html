@@ -162,7 +162,8 @@ function bandForm(){
   <div class="f"><span class="lab">Photo</span>${pic?`<img class="pre" src="${esc(pic)}" alt="">`:''}<input type="file" name="photo" accept="image/*"><small>Square-ish works best. It's shrunk automatically. Leave empty to keep the current one.</small></div>
   <div class="g2">${F('Bandcamp','bandcamp_url',b.bandcamp_url,{type:'url',ph:'https://…'})}${F('Instagram','instagram_url',b.instagram_url,{type:'url',ph:'https://…'})}
   ${F('Facebook','facebook_url',b.facebook_url,{type:'url',ph:'https://…'})}${F('Spotify','spotify_url',b.spotify_url,{type:'url',ph:'https://…'})}
-  ${F('YouTube','youtube_url',b.youtube_url,{type:'url',ph:'https://…'})}${F('Website','website_url',b.website_url,{type:'url',ph:'https://…'})}</div>
+  ${F('YouTube','youtube_url',b.youtube_url,{type:'url',ph:'https://…'})}${F('Website','website_url',b.website_url,{type:'url',ph:'https://…'})}
+  ${S.bands.length&&('merch_url' in S.bands[0])?F('Merch link','merch_url',b.merch_url,{type:'url',ph:defaultMerch(b.bandcamp_url)||'https://…',hint:'Leave blank to use the Bandcamp merch page'+(defaultMerch(b.bandcamp_url)?' ('+defaultMerch(b.bandcamp_url)+')':'')+'.'}):''}</div>
   ${S.admin?`<div class="g2"><div class="f"><span class="lab">Show on the site</span><label class="chk"><input type="checkbox" name="published" ${b.published?'checked':''}> Published</label></div>${F('Order on roster','sort_order',b.sort_order,{type:'number',hint:'Lower numbers come first.'})}</div>
   ${F('Private note (only admins see this)','note',note,{area:1,rows:3})}`:''}
   <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn red" type="submit">Save</button><button class="btn" type="button" data-act="cancel">Cancel</button>${S.admin&&!isNew?`<button class="btn" type="button" data-act="delBand" data-id="${b.id}" style="margin-left:auto">Delete band</button>`:''}</div>
@@ -178,11 +179,13 @@ async function shrink(file,max=1000){
     return await new Promise((ok,no)=>c.toBlob(b=>b?ok(b):no(new Error('Image conversion failed')),'image/jpeg',.85));
   }finally{URL.revokeObjectURL(url)}
 }
+const defaultMerch=u=>{try{return u?new URL(u).origin+'/merch':''}catch(e){return ''}};
 async function saveBand(form){
   const id=form.dataset.id,d=new FormData(form);
   const row={name:nul(d.get('name')),location:nul(d.get('location')),bio:nul(d.get('bio')),
     bandcamp_url:link(d.get('bandcamp_url')),instagram_url:link(d.get('instagram_url')),facebook_url:link(d.get('facebook_url')),
     spotify_url:link(d.get('spotify_url')),youtube_url:link(d.get('youtube_url')),website_url:link(d.get('website_url'))};
+  if(form.merch_url)row.merch_url=link(d.get('merch_url'));
   if(!row.name)throw new Error('The band needs a name');
   if(S.admin){row.published=d.has('published');row.sort_order=parseInt(d.get('sort_order'),10)||0}
   let bandId=id;
