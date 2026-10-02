@@ -7,7 +7,9 @@ opens every release page and collects: title, artist, date, cover image, about
 text, credits, track list and the official embed player id. It writes CSV and
 JSON files for you to look over, plus a SQL file to paste into Supabase.
 
-Run it on your own computer (it needs internet access to bandcamp.com).
+NOTE: Bandcamp now shows plain scripts a "Client Challenge" bot check, so the
+live crawl below may find nothing. The supported route is the browser-collected
+file: python bandcamp_crawl.py --import-json data/crawl/browser_raw.jsonl
 Needs Python 3.8+ and nothing else installed.
 
     python bandcamp_crawl.py                  # everything, politely (about 2 seconds between requests)
@@ -253,25 +255,135 @@ def write_sql(path, bands, releases):
                 q(b["youtube_url"]), q(b["website_url"]), q(b["image_url"]), q(b["slug"])))
     L.append("")
     for r in releases:
-        match = "(bandcamp_url=%s or lower(title)=lower(%s))" % (q(r["url"]), q(r["title"]))
+        match = "(bandcamp_url=%s or (lower(title)=lower(%s) and lower(coalesce(artist_text,''))=lower(%s)) or (lower(title)=lower(%s) and artist_text='[artist unknown]'))" % (q(r["url"]), q(r["title"]), q(r["artist"]), q(r["title"]))
         tracks = json.dumps(r["tracks"], ensure_ascii=False) if r["tracks"] else None
         L.append("insert into public.releases (title,artist_text,type,released_text,released_date,bandcamp_url,cover_url,embed_url,description,tracks) "
                  "select %s,%s,%s,%s,%s::date,%s,%s,%s,%s,%s::jsonb where not exists (select 1 from public.releases where %s);" % (
                      q(r["title"]), q(r["artist"]), q((r["type"] or "").capitalize() or None), q(r["released_text"]), q(r["released_date"]),
                      q(r["url"]), q(r["cover_url"]), q(r["embed_url"]), q(r["about"]), q(tracks), match))
         L.append("update public.releases set "
+                 "artist_text=case when artist_text='[artist unknown]' then %s else artist_text end, "
                  "bandcamp_url=case when bandcamp_url is null or bandcamp_url like '%%/music' then %s else bandcamp_url end, "
                  "cover_url=coalesce(cover_url,%s), embed_url=coalesce(embed_url,%s), description=coalesce(description,%s), "
                  "tracks=coalesce(tracks,%s::jsonb), released_date=coalesce(released_date,%s::date), released_text=coalesce(released_text,%s) "
-                 "where %s;" % (q(r["url"]), q(r["cover_url"]), q(r["embed_url"]), q(r["about"]), q(tracks),
+                 "where %s;" % (q(r["artist"]), q(r["url"]), q(r["cover_url"]), q(r["embed_url"]), q(r["about"]), q(tracks),
                                 q(r["released_date"]), q(r["released_text"]), match))
-        rmatch = "(r.bandcamp_url=%s or lower(r.title)=lower(%s))" % (q(r["url"]), q(r["title"]))
+        rmatch = "(r.bandcamp_url=%s or (lower(r.title)=lower(%s) and lower(coalesce(r.artist_text,''))=lower(%s)) or (lower(r.title)=lower(%s) and r.artist_text='[artist unknown]'))" % (q(r["url"]), q(r["title"]), q(r["artist"]), q(r["title"]))
         for slug in r["band_slugs"]:
             L.append("insert into public.release_bands (release_id, band_id) select r.id, b.id from public.releases r, public.bands b "
                      "where %s and b.slug=%s on conflict do nothing;" % (rmatch, q(slug)))
         L.append("")
     with open(path, "w", encoding="utf-8") as f:
         f.write("\n".join(L))
+
+
+# ------------------------------------------------------- browser import
+def _untok(s):
+    if s is None:
+        return None
+    return str(s).replace("[eq]", "=").replace("[amp]", "&").replace("[q]", "?")
+
+
+_MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august",
+           "september", "october", "november", "december"]
+
+
+def _date(s):
+    """'2025-06-01' or '28 Aug 2026' -> (iso, '28 August 2026')."""
+    s = (s or "").strip()
+    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})", s)
+    if m:
+        y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    else:
+        m = re.match(r"^(\d{1,2}) ([A-Za-z]{3,9}) (\d{4})", s)
+        if not m:
+            return None, None
+        d, y = int(m.group(1)), int(m.group(3))
+        mo = [x[:3] for x in _MONTHS].index(m.group(2)[:3].lower()) + 1
+    return "%04d-%02d-%02d" % (y, mo, d), "%d %s %d" % (d, _MONTHS[mo - 1].capitalize(), y)
+
+
+def _clean_bio(s):
+    s = re.sub(r"\s+", " ", _untok(s) or "").strip()
+    if not s or "... more" in s or s.endswith("..."):
+        return None  # Bandcamp truncated it: leave the bio for the band to supply
+    return s
+
+
+def _clean_insta(u):
+    if not u:
+        return None
+    u = u.split("?")[0].replace("/profilecard/", "/").replace("http://", "https://")
+    return u.rstrip("/") + "/" if "instagram.com/" in u else u
+
+
+def import_browser_json(path, bands_csv, out_dir, sql_path):
+    """Turn data/crawl/browser_raw.jsonl (collected through a real browser) into CSVs + SQL."""
+    name_to_slug = {b["name"].strip().lower(): b["slug"] for b in read_bands(bands_csv)}
+    band_rows, merged = [], {}
+    for line in open(path, encoding="utf-8"):
+        line = line.strip()
+        if not line:
+            continue
+        rec = json.loads(line)
+        slug, origin, d = rec["slug"], rec["origin"], rec["d"]
+        b = d["b"]
+        img = _untok(b.get("image_url"))
+        if img and re.search(r"/img/a\d+_", img):
+            img = None  # that is album art, not a band photo
+        band_rows.append({
+            "slug": slug, "name": _untok(b.get("name")), "location": _untok(b.get("location")),
+            "bio": _clean_bio(b.get("bio")), "image_url": img,
+            "instagram_url": _clean_insta(_untok(b.get("instagram_url"))),
+            "facebook_url": _untok(b.get("facebook_url")), "spotify_url": _untok(b.get("spotify_url")),
+            "youtube_url": _untok(b.get("youtube_url")), "website_url": _untok(b.get("website_url"))})
+        bname = _untok(b.get("name"))
+        for r in d["r"]:
+            r = list(r) + [None] * (8 - len(r))
+            title, artist, kind, href, dt, rid, art, about = r[:8]
+            title = _untok(title)
+            if not title or kind not in ("a", "t") or not rid:
+                continue
+            iso, text = _date(dt)
+            artist = _untok(artist) or bname
+            url = href if href.startswith("http") else origin + href
+            key = (title.strip().lower(), iso)
+            slugs = [slug]
+            for nm in re.split(r"\s*(?:/|&| x | and )\s*", artist):
+                s2 = name_to_slug.get(nm.strip().lower())
+                if s2 and s2 not in slugs:
+                    slugs.append(s2)
+            if key in merged:  # same release listed on two bands' pages (a split)
+                m = merged[key]
+                for s2 in slugs:
+                    if s2 not in m["band_slugs"]:
+                        m["band_slugs"].append(s2)
+                if artist.lower() not in m["artist"].lower():
+                    m["artist"] += " / " + artist
+                continue
+            artid = str(art or "")
+            cover = ("https://f4.bcbits.com/img/a%s_5.jpg" % artid[1:].zfill(10)) if artid.startswith("a") else None
+            merged[key] = {
+                "title": title, "artist": artist, "type": "Album" if kind == "a" else "Track",
+                "released_text": text, "released_date": iso, "url": url, "cover_url": cover,
+                "embed_url": "https://bandcamp.com/EmbeddedPlayer/%s=%s/" % ("album" if kind == "a" else "track", rid),
+                "about": (_untok(about) or "").strip() or None, "tracks": None, "band_slugs": slugs}
+    releases = sorted(merged.values(), key=lambda x: (x["band_slugs"][0], x["released_date"] or ""), reverse=False)
+    os.makedirs(out_dir, exist_ok=True)
+    with open(os.path.join(out_dir, "bands.csv"), "w", encoding="utf-8-sig", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=list(band_rows[0].keys()))
+        w.writeheader(); w.writerows(band_rows)
+    with open(os.path.join(out_dir, "releases.csv"), "w", encoding="utf-8-sig", newline="") as f:
+        cols = ["title", "artist", "band_slugs", "type", "released_text", "released_date", "url", "cover_url", "embed_url", "about"]
+        w = csv.DictWriter(f, fieldnames=cols, extrasaction="ignore")
+        w.writeheader()
+        for r in releases:
+            w.writerow(dict(r, band_slugs=",".join(r["band_slugs"])))
+    write_sql(sql_path, band_rows, releases)
+    print("Imported %d bands and %d releases (same title+date on two bands = one release)." % (
+        len(band_rows), len(releases)))
+    print("  CSVs:", out_dir)
+    print("  SQL :", sql_path)
 
 
 # -------------------------------------------------------------------- main
@@ -305,11 +417,14 @@ def main():
     ap.add_argument("--delay", type=float, default=2.0, help="seconds between requests (default 2)")
     ap.add_argument("--refresh", action="store_true", help="ignore the cache and fetch again")
     ap.add_argument("--label", action="store_true", help="also crawl the label page https://socksonrecords.bandcamp.com")
+    ap.add_argument("--import-json", help="import releases collected through a real browser (data/crawl/browser_raw.jsonl)")
     ap.add_argument("--parse-file", help="parse a saved Bandcamp HTML file and print what was found, then stop")
     a = ap.parse_args()
 
     if a.parse_file:
         return parse_file(a.parse_file)
+    if a.import_json:
+        return import_browser_json(a.import_json, a.bands_csv, a.out, a.sql)
 
     bands = read_bands(a.bands_csv)
     if a.only:
