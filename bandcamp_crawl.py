@@ -264,7 +264,8 @@ def write_sql(path, bands, releases):
         L.append("update public.releases set "
                  "artist_text=case when artist_text='[artist unknown]' then %s else artist_text end, "
                  "bandcamp_url=case when bandcamp_url is null or bandcamp_url like '%%/music' then %s else bandcamp_url end, "
-                 "cover_url=coalesce(cover_url,%s), embed_url=coalesce(embed_url,%s), description=coalesce(description,%s), "
+                 "cover_url=case when cover_url is null or cover_url like '%%bcbits.com%%' then coalesce(%s,cover_url) else cover_url end, "
+                 "embed_url=case when embed_url is null or embed_url ~ '^https://bandcamp.com/EmbeddedPlayer/(album|track)=[0-9]+/$' then coalesce(%s,embed_url) else embed_url end, description=coalesce(description,%s), "
                  "tracks=coalesce(tracks,%s::jsonb), released_date=coalesce(released_date,%s::date), released_text=coalesce(released_text,%s) "
                  "where %s;" % (q(r["artist"]), q(r["url"]), q(r["cover_url"]), q(r["embed_url"]), q(r["about"]), q(tracks),
                                 q(r["released_date"]), q(r["released_text"]), match))
@@ -321,11 +322,12 @@ def import_browser_json(path, bands_csv, out_dir, sql_path):
     """Turn data/crawl/browser_raw.jsonl (collected through a real browser) into CSVs + SQL."""
     name_to_slug = {b["name"].strip().lower(): b["slug"] for b in read_bands(bands_csv)}
     band_rows, merged = [], {}
-    for line in open(path, encoding="utf-8"):
+    for lineno, line in enumerate(open(path, encoding="utf-8"), 1):
         line = line.strip()
         if not line:
             continue
         rec = json.loads(line)
+        old_layout = lineno <= 16  # first 16 bands were saved as [.., art_id, 'a'|'t'+item_id]
         slug, origin, d = rec["slug"], rec["origin"], rec["d"]
         b = d["b"]
         is_label = slug == "label"
@@ -343,11 +345,15 @@ def import_browser_json(path, bands_csv, out_dir, sql_path):
         for r in d["r"]:
             r = list(r) + [None] * (8 - len(r))
             title, artist, kind, href, dt, rid, art, about = r[:8]
+            if old_layout and art:
+                rid, art = str(art)[1:], "a" + str(rid)
             title = _untok(title)
             if not title or kind not in ("a", "t") or not rid:
                 continue
             iso, text = _date(dt)
             artist = _untok(artist) or bname
+            if artist.lower().startswith("socks on records"):
+                artist = "Socks On Records"  # compilations / live albums: one name so the site can filter on it
             if artist == "O":
                 artist = "O (My Name Is O)"
             if artist == "O featuring The Dan The D":
@@ -359,6 +365,8 @@ def import_browser_json(path, bands_csv, out_dir, sql_path):
             slugs = [] if is_label else [slug]
             for s2 in slugs_extra:
                 slugs.append(s2)
+            if title.lower().startswith("dodge does das"):
+                slugs.extend(x for x in ("gtfod", "das-kapitans") if x not in slugs)
             if artist.startswith("O (My"):
                 slugs.append("my-name-is-o")
             for nm in re.split(r"\s*(?:/|&| x | and )\s*", artist):
@@ -395,6 +403,12 @@ def import_browser_json(path, bands_csv, out_dir, sql_path):
         for r in releases:
             w.writerow(dict(r, band_slugs=",".join(r["band_slugs"])))
     write_sql(sql_path, band_rows, releases)
+    with open(sql_path, "a", encoding="utf-8") as f:
+        f.write("\n-- Label compilations and live albums all get the artist 'Socks On Records' so the Releases filter can find them.\n"
+                "update public.releases set artist_text='Socks On Records' where "
+                "lower(coalesce(artist_text,'')) in ('various artists','various','socks on records and friends','socks on records & friends') "
+                "or bandcamp_url like 'https://socksonrecords.bandcamp.com/%' "
+                "or lower(title) like 'music against living miserably%';\n")
     print("Imported %d bands and %d releases (same title+date on two bands = one release)." % (
         len(band_rows), len(releases)))
     print("  CSVs:", out_dir)

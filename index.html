@@ -343,16 +343,27 @@ function featured(){
   return `<article class="feat"><div>${covr}</div><div>${f.kicker?`<p class="mono" style="color:var(--sky);margin-bottom:10px">${esc(f.kicker)}</p>`:''}<h2 class="disp" style="font-size:46px;margin-bottom:14px">${esc(f.title)}</h2>${f.blurb?`<p style="margin-bottom:22px;max-width:560px;white-space:pre-line">${esc(f.blurb)}</p>`:''}${pl?`<div style="margin-bottom:22px;border:2px solid var(--sky)">${pl}</div>`:''}<a class="btn red" href="${href}">Listen on Bandcamp &#8599;</a></div></article>`;
 }
 
+let RELFILTER='';
+const LABELKEY='__label';
+function relMatch(r,f){if(!f)return true;if(f===LABELKEY)return /^socks on records/i.test(r.artist||'');return r.slugs.includes(f)}
+function relCards(f){
+  const list=RELEASES.filter(r=>relMatch(r,f));
+  if(!list.length)return '<p class="mono" style="grid-column:1/-1">Nothing here yet.</p>';
+  return list.map((r,i)=>{const c=COLS[i%4];const u=safeUrl(r.url)||'https://socksonrecords.bandcamp.com/music';return `<article><a href="${u}" style="text-decoration:none">${cover(r.title,c[0],c[1],28,r.cover_url)}</a><h3 class="disp" style="font-size:22px;margin:18px 0 6px">${esc(r.title)}</h3><p class="mono" style="margin-bottom:4px">${esc(r.artist)}</p><p class="mono" style="color:var(--muted);margin-bottom:14px">${r.released_text?esc(r.released_text):'[Date]'}</p><a class="btn small" href="${u}">Listen &#8599;</a></article>`}).join('');
+}
+function relCount(f){const n=RELEASES.filter(r=>relMatch(r,f)).length;return n+(n===1?' release':' releases')}
 function releases(){
-  const cards=RELEASES.map((r,i)=>{const c=COLS[i%4];const u=safeUrl(r.url)||'https://socksonrecords.bandcamp.com/music';return `<article><a href="${u}" style="text-decoration:none">${cover(r.title,c[0],c[1],28,r.cover_url)}</a><h3 class="disp" style="font-size:22px;margin:18px 0 6px">${esc(r.title)}</h3><p class="mono" style="margin-bottom:4px">${esc(r.artist)}</p><p class="mono" style="color:var(--muted);margin-bottom:14px">${r.released_text?esc(r.released_text):'[Date]'}</p><a class="btn small" href="${u}">Listen &#8599;</a></article>`}).join('');
+  const has=new Set();RELEASES.forEach(r=>r.slugs.forEach(x=>has.add(x)));
+  const opts=BANDS.filter(b=>has.has(b.slug)).slice().sort((x,y)=>x.name.localeCompare(y.name)).map(b=>`<option value="${esc(b.slug)}"${RELFILTER===b.slug?' selected':''}>${esc(b.name)}</option>`).join('');
   return head('Records, compilations &amp; live albums','Releases',"Everything we've put out. Listen and buy on Bandcamp, pay what you like, support the bands.")+`
 <section style="padding:64px 0 24px"><div class="wrap">${featured()}</div></section>
 <section style="padding:48px 0 96px"><div class="wrap">
-<div style="display:flex;align-items:center;gap:16px;margin-bottom:32px"><h2 class="disp" style="font-size:44px">All releases</h2><div class="stripes"></div></div>
-<div class="g4">${cards}</div>
-<p class="mono" style="margin-top:36px;color:var(--muted)">Tiles without a cover are placeholders. Bracketed details still need filling in.</p>
+<div style="display:flex;align-items:center;gap:16px;margin-bottom:20px"><h2 class="disp" style="font-size:44px">All releases</h2><div class="stripes"></div></div>
+<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:32px"><label for="relfilter" class="mono">Show</label><select id="relfilter" style="font:inherit;font-size:17px;min-height:48px;padding:8px 14px;border:2px solid var(--ink);background:var(--paper);color:var(--ink);max-width:100%"><option value="">All artists</option><option value="${LABELKEY}"${RELFILTER===LABELKEY?' selected':''}>Socks On Records (compilations &amp; live)</option>${opts}</select><span id="relcount" class="mono" style="color:var(--muted)">${relCount(RELFILTER)}</span></div>
+<div class="g4" id="relgrid">${relCards(RELFILTER)}</div>
 </div></section>`;
 }
+document.addEventListener('change',e=>{if(e.target&&e.target.id==='relfilter'){RELFILTER=e.target.value;const g=document.getElementById('relgrid'),c=document.getElementById('relcount');if(g)g.innerHTML=relCards(RELFILTER);if(c)c.textContent=relCount(RELFILTER)}});
 
 function contact(){
   return head('Say hello','Contact','Got a gig in mind, a band that should be on the roster, or just want to say hello? Drop us a line.')+`

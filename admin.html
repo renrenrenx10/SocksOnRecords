@@ -306,7 +306,15 @@ function bcEmbed(v){
   return 'https://bandcamp.com/EmbeddedPlayer/'+id[1]+'='+id[2]+'/';
 }
 const playerSrc=u=>{const m=/(album|track)=(\d+)/.exec(u||'');return m?`https://bandcamp.com/EmbeddedPlayer/${m[1]}=${m[2]}/size=large/bgcol=16130F/linkcol=86AEB9/tracklist=false/artwork=small/transparent=true/`:''};
-const previewHtml=u=>{try{const e=bcEmbed(u);return e?`<iframe style="border:0;width:100%;max-width:480px;height:120px;display:block;background:#16130F" src="${playerSrc(e)}" title="Player preview" seamless></iframe>`:'<small>No player yet. Paste an embed code above to add one.</small>'}catch(x){return '<small style="color:var(--red)">'+esc(x.message)+'</small>'}};
+const prevSrc=u=>{try{const e=bcEmbed(u);return e?playerSrc(e):''}catch(x){return ''}};
+const previewHtml=u=>{try{const e=bcEmbed(u);return e?`<iframe data-src="${playerSrc(e)}" style="border:0;width:100%;max-width:480px;height:120px;display:block;background:#16130F" src="${playerSrc(e)}" title="Player preview" seamless></iframe>`:'<small>No player yet. Paste an embed code above to add one.</small>'}catch(x){return '<small style="color:var(--red)">'+esc(x.message)+'</small>'}};
+/* only touch the player when the link really changed, so it keeps playing while you type elsewhere */
+function setPreview(u){
+  const box=$('#fprev');if(!box)return;
+  const want=prevSrc(u),cur=box.querySelector('iframe');
+  if(want&&cur&&cur.dataset.src===want)return;
+  box.innerHTML=previewHtml(u);
+}
 function featuredView(){
   if(!S.settings)return `<div class="note"><strong>One setup step first.</strong> Run <code>03-featured-and-crawl.sql</code> (in the supabase folder) in the Supabase SQL Editor, then reload this page.</div>`;
   const f=Object.assign({},FEAT_DEFAULT,S.settings.value||{});
@@ -318,7 +326,7 @@ function featuredView(){
   <div class="g2">${F('Small heading','kicker',f.kicker,{ph:'Featured · Sep 2023'})}${F('Title','title',f.title,{req:1})}</div>
   ${F('Blurb','blurb',f.blurb,{area:1,rows:4})}
   <div class="g2">${F('Bandcamp link (for the button)','link_url',f.link_url,{type:'url',ph:'https://…'})}${F('Cover image link (optional)','cover_url',f.cover_url,{type:'url',ph:'https://…'})}</div>
-  ${F('Bandcamp player','embed_url',f.embed_url,{area:1,rows:3,hint:'On the release page on Bandcamp: Share / Embed, choose the album player, copy the code and paste it here. It gets restyled to match the site.'})}
+  ${F('Bandcamp player','embed_url',f.embed_url,{area:1,rows:3,hint:'On the release page on Bandcamp: Share / Embed, choose the album player, copy the code and paste it here. It gets restyled to match the site. If the preview says "not available", that player link is wrong.'})}
   <div class="f"><span class="lab">Preview</span><div id="fprev">${previewHtml(f.embed_url)}</div></div>
   <button class="btn red" type="submit">Save featured release</button></form>`;
 }
@@ -327,6 +335,7 @@ async function saveFeatured(form){
   const v={kicker:nul(d.get('kicker')),title:nul(d.get('title')),blurb:nul(d.get('blurb')),link_url:link(d.get('link_url')),cover_url:link(d.get('cover_url')),embed_url:bcEmbed(d.get('embed_url'))};
   if(!v.title)throw new Error('The featured release needs a title');
   ck(await db.from('site_settings').upsert({key:'featured_release',value:v,updated_at:new Date().toISOString()}));
+  S.settings=Object.assign({},S.settings,{key:'featured_release',value:v});
 }
 
 /* ----- people (admin) ----- */
@@ -362,14 +371,14 @@ app.addEventListener('click',e=>{
     else if(a==='rmMember'){ck(await db.from('band_members').delete().eq('band_id',t.dataset.b).eq('user_id',t.dataset.u));await reload();toast('Removed')}
   });
 });
-app.addEventListener('input',e=>{if(e.target.name==='embed_url'&&e.target.closest('[data-form=featured]'))$('#fprev').innerHTML=previewHtml(e.target.value)});
+app.addEventListener('input',e=>{if(e.target.name==='embed_url'&&e.target.closest('[data-form=featured]'))setPreview(e.target.value)});
 app.addEventListener('change',e=>{
   const t=e.target;
   if(t.dataset&&t.dataset.act==='pickRelease'){
     const r=S.releases.find(x=>x.id===t.value),f=t.closest('form');if(!r)return;
     f.title.value=r.title||'';f.kicker.value='Featured'+(r.released_text?' · '+r.released_text:'');
     f.blurb.value=r.description||f.blurb.value;f.link_url.value=r.bandcamp_url||'';f.cover_url.value=r.cover_url||'';
-    f.embed_url.value=r.embed_url||'';$('#fprev').innerHTML=previewHtml(r.embed_url);
+    f.embed_url.value=r.embed_url||'';setPreview(r.embed_url);
   }
   if(t.dataset&&t.dataset.act==='toggleAdmin')run(async()=>{
     ck(await db.from('profiles').update({is_admin:t.checked}).eq('id',t.dataset.id));await reload();toast(t.checked?'Now an admin':'No longer an admin');
@@ -394,7 +403,7 @@ app.addEventListener('submit',e=>{
         if(r.error)throw r.error;f.reset();toast('Password saved');
       }else if(kind==='band'){await saveBand(f);S.edit=null;await reload();toast('Saved. The site shows it straight away.')}
       else if(kind==='gig'){await saveGig(f);S.edit=null;await reload();toast('Gig saved')}
-      else if(kind==='featured'){await saveFeatured(f);await reload();toast('Saved. The Releases page shows it straight away.')}
+      else if(kind==='featured'){await saveFeatured(f);toast('Saved. The Releases page shows it straight away.')}
       else if(kind==='release'){await saveRelease(f);S.edit=null;await reload();toast('Release saved')}
     }finally{if(btn&&document.body.contains(btn))btn.disabled=false}
   });
