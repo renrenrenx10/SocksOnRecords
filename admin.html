@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Socks On Records · Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--sky:#86AEB9;--paper:#F4F0E6;--ink:#16130F;--red:#C81F28;--card:#FBF9F3;--mute:#4a443b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:'Archivo',system-ui,sans-serif;font-size:17px;line-height:1.5}
+h1,h2,h3,p{margin:0}
+.disp{font-family:'Anton',Impact,sans-serif;font-weight:400;text-transform:uppercase;line-height:1;letter-spacing:.01em}
+.mono{font-family:'Space Mono',ui-monospace,monospace;font-size:13px;letter-spacing:.04em;text-transform:uppercase}
+.top{background:var(--ink);color:var(--paper);border-bottom:5px solid var(--sky);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.top a{color:var(--paper);text-decoration:none}
+.brand{font-family:'Anton',Impact,sans-serif;text-transform:uppercase;font-size:24px;letter-spacing:.02em}
+.brand span{color:var(--sky)}
+#who{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.wrap{max-width:980px;margin:0 auto;padding:28px 20px 80px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:28px;border-bottom:3px solid var(--ink)}
+.tabs button{font-family:'Anton',Impact,sans-serif;text-transform:uppercase;font-size:19px;letter-spacing:.03em;background:none;border:0;padding:10px 18px;min-height:46px;cursor:pointer;color:var(--ink)}
+.tabs button.on{background:var(--ink);color:var(--paper)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 18px;border:2px solid var(--ink);background:var(--paper);color:var(--ink);font-family:'Anton',Impact,sans-serif;text-transform:uppercase;font-size:16px;letter-spacing:.04em;box-shadow:3px 3px 0 var(--ink);cursor:pointer;text-decoration:none}
+.btn:hover{transform:translate(1px,1px);box-shadow:2px 2px 0 var(--ink)}
+.btn.red{background:var(--red);color:var(--paper)}
+.btn.sm{min-height:36px;padding:0 12px;font-size:14px;box-shadow:2px 2px 0 var(--ink)}
+.btn.ghost{box-shadow:none;border-color:var(--paper);background:transparent;color:var(--paper)}
+.card{background:var(--card);border:2px solid var(--ink);box-shadow:5px 5px 0 var(--ink);padding:22px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 0;border-bottom:2px solid var(--ink);flex-wrap:wrap}
+.row:first-child{border-top:2px solid var(--ink)}
+.row .t{font-family:'Anton',Impact,sans-serif;text-transform:uppercase;font-size:22px;letter-spacing:.01em}
+.row .s{color:var(--mute);font-size:15px}
+.row .a{display:flex;gap:8px;flex-wrap:wrap}
+.bar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap}
+.f{display:flex;flex-direction:column;gap:5px;margin-bottom:18px}
+.f label,.lab{font-family:'Space Mono',monospace;font-size:13px;text-transform:uppercase;letter-spacing:.04em}
+.f small{color:var(--mute);font-size:14px}
+input[type=text],input[type=email],input[type=password],input[type=url],input[type=date],input[type=number],select,textarea{font:inherit;font-size:17px;width:100%;min-height:46px;padding:9px 12px;border:2px solid var(--ink);border-radius:0;background:var(--paper);color:var(--ink)}
+textarea{resize:vertical}
+input:focus,select:focus,textarea:focus,button:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}
+.chk{display:flex;align-items:center;gap:10px;min-height:40px}
+.chk input{width:22px;height:22px;accent-color:var(--red)}
+.checks{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:2px 16px;border:2px solid var(--ink);background:var(--paper);padding:10px 14px;max-height:260px;overflow:auto}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--sky);border:2px solid var(--ink);padding:2px 4px 2px 10px;font-size:15px;margin:0 6px 6px 0}
+.chip button{border:0;background:none;font-size:18px;cursor:pointer;min-width:28px;min-height:28px}
+.tag{font-family:'Space Mono',monospace;font-size:12px;text-transform:uppercase;border:2px solid var(--ink);padding:1px 8px;margin-left:8px;vertical-align:middle;background:var(--sky)}
+.tag.bad{background:var(--red);color:var(--paper)}
+.pre{width:140px;height:140px;object-fit:cover;border:2px solid var(--ink);display:block;margin-bottom:10px;background:var(--paper)}
+.note{border-left:6px solid var(--red);background:var(--card);padding:12px 16px;margin-bottom:22px}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:12px 20px;border:2px solid var(--paper);font-weight:700;max-width:90vw;display:none;z-index:9}
+#toast.bad{background:var(--red)}
+h2.disp{font-size:34px}
+.center{max-width:460px;margin:60px auto}
+@media (max-width:640px){.g2{grid-template-columns:1fr}.row .t{font-size:20px}}
+</style>
+</head>
+<body>
+<header class="top"><a class="brand" href="index.html">Socks On Records <span>Admin</span></a><div id="who"></div></header>
+<main class="wrap" id="app"><p class="mono">Loading…</p></main>
+<div id="toast" role="status"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+<script>
+const SUPABASE_URL="https://xnbkdgmojfupjerqorcw.supabase.co";
+const SUPABASE_KEY="sb_publishable__XrZLQTrqwf9xeLBn5xI7w_vVgFJzCf"; // publishable key: safe in the page, row level security does the guarding
+const db=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+
+const $=s=>document.querySelector(s);
+const app=$('#app');
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const nul=v=>{v=(v==null?'':String(v)).trim();return v===''?null:v};
+const link=v=>{v=nul(v);if(v&&!/^https?:\/\//i.test(v))throw new Error('Links must start with http:// or https://  ('+v+')');return v};
+const slugify=s=>String(s).toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g,'').replace(/&/g,' and ').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+const ck=r=>{if(r.error)throw r.error;return r.data};
+const today=()=>{const n=new Date();return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0')};
+const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const fmt=s=>{if(!s)return '';const p=s.split('-').map(Number);return p[2]+' '+MON[p[1]-1]+' '+p[0]};
+
+let S={user:null,profile:null,admin:false,mine:[],bands:[],gigs:[],releases:[],people:[],members:[],notes:[],tab:'bands',edit:null,ready:false};
+
+let tt;
+function toast(m,bad){const t=$('#toast');t.textContent=m;t.className=bad?'bad':'';t.style.display='block';clearTimeout(tt);tt=setTimeout(()=>t.style.display='none',bad?7000:2800)}
+async function run(fn){try{await fn()}catch(e){console.error(e);toast(e.message||String(e),true)}}
+
+/* ---------- loading ---------- */
+async function load(){
+  S.profile=ck(await db.from('profiles').select('*').eq('id',S.user.id).maybeSingle());
+  S.admin=!!(S.profile&&S.profile.is_admin);
+  S.mine=ck(await db.from('band_members').select('band_id').eq('user_id',S.user.id)).map(r=>r.band_id);
+  S.bands=ck(await db.from('bands').select('*').order('sort_order').order('name'));
+  S.gigs=ck(await db.from('gigs').select('*,gig_acts(position,act_name,band_id,bands(name))').order('event_date',{ascending:false}));
+  S.releases=ck(await db.from('releases').select('*,release_bands(band_id)').order('released_date',{ascending:false,nullsFirst:false}).order('title'));
+  if(S.admin){
+    S.people=ck(await db.from('profiles').select('*').order('email'));
+    S.members=ck(await db.from('band_members').select('*'));
+    S.notes=ck(await db.from('band_notes').select('*'));
+  }
+  S.ready=true;
+}
+async function reload(){await load();render()}
+
+/* ---------- views ---------- */
+function loginView(){
+  $('#who').innerHTML='';
+  app.innerHTML=`<div class="center card">
+  <h2 class="disp" style="margin-bottom:10px">Sign in</h2>
+  <p style="margin-bottom:20px">For label admins and bands. We'll email you a link, no password needed. You need to have been invited first.</p>
+  <form data-form="magic"><div class="f"><label for="em">Your email</label><input id="em" name="email" type="email" required autocomplete="email"></div>
+  <button class="btn red" type="submit">Email me a sign-in link</button></form>
+  <details style="margin-top:22px"><summary class="lab" style="cursor:pointer;min-height:36px">Use a password instead</summary>
+  <form data-form="pw" style="margin-top:12px"><div class="f"><label for="em2">Email</label><input id="em2" name="email" type="email" required autocomplete="email"></div>
+  <div class="f"><label for="pw">Password</label><input id="pw" name="password" type="password" required autocomplete="current-password"></div>
+  <button class="btn" type="submit">Sign in</button></form></details></div>`;
+}
+
+function render(){
+  if(!S.user){loginView();return}
+  $('#who').innerHTML=`<span class="mono">${esc(S.user.email)}${S.admin?'<span class="tag">Admin</span>':''}</span><button class="btn sm ghost" data-act="signout">Sign out</button>`;
+  if(!S.ready){app.innerHTML='<p class="mono">Loading…</p>';return}
+  if(!S.profile){app.innerHTML=`<div class="card"><h2 class="disp" style="margin-bottom:10px">Something's off</h2><p>You're signed in, but there's no profile for you yet. Ask Roy to check your invite.</p></div>`;return}
+  if(!S.admin&&!S.mine.length){app.innerHTML=`<div class="card"><h2 class="disp" style="margin-bottom:10px">You're in</h2><p>You're signed in, but you're not linked to a band yet. Ask Roy to link your login to your band and you'll be able to edit it here.</p></div>${account()}`;return}
+  const tabs=S.admin?[['bands','Bands'],['gigs','Gigs'],['releases','Releases'],['people','People']]:[['bands','My band'],['gigs','Gigs']];
+  if(!tabs.some(t=>t[0]===S.tab))S.tab='bands';
+  const tb=`<div class="tabs" role="tablist">${tabs.map(t=>`<button role="tab" class="${S.tab===t[0]?'on':''}" data-act="tab" data-tab="${t[0]}">${t[1]}</button>`).join('')}</div>`;
+  let body='';
+  if(S.tab==='bands')body=S.edit?bandForm():bandList();
+  else if(S.tab==='gigs')body=S.edit?gigForm():gigList();
+  else if(S.tab==='releases')body=S.edit?releaseForm():releaseList();
+  else if(S.tab==='people')body=peopleView();
+  app.innerHTML=tb+body+(S.edit?'':account());
+  window.scrollTo(0,0);
+}
+function account(){return `<form class="card" data-form="setpw" style="margin-top:40px"><h3 class="disp" style="font-size:24px;margin-bottom:8px">Your password (optional)</h3><p style="margin-bottom:12px;color:var(--mute)">Set one if you'd rather not wait for an email link each time.</p><div class="f" style="max-width:340px"><label for="npw">New password</label><input id="npw" name="password" type="password" minlength="8" required autocomplete="new-password"></div><button class="btn sm" type="submit">Save password</button></form>`}
+
+const F=(label,name,val,o={})=>`<div class="f"><label for="${name}">${label}</label>${o.area?`<textarea id="${name}" name="${name}" rows="${o.rows||5}">${esc(val)}</textarea>`:`<input id="${name}" name="${name}" type="${o.type||'text'}" value="${esc(val)}"${o.req?' required':''}${o.ph?` placeholder="${esc(o.ph)}"`:''}>`}${o.hint?`<small>${o.hint}</small>`:''}</div>`;
+const myBands=()=>S.admin?S.bands:S.bands.filter(b=>S.mine.includes(b.id));
+
+/* ----- bands ----- */
+function bandList(){
+  const list=myBands();
+  return `<div class="bar"><h2 class="disp">${S.admin?'Bands':'Your band'}</h2>${S.admin?'<button class="btn red" data-act="new">+ Add a band</button>':''}</div>
+  ${list.length?list.map(b=>`<div class="row"><div><div class="t">${esc(b.name)}${b.published?'':'<span class="tag bad">Hidden</span>'}</div><div class="s">${esc(b.location||'No location yet')} · ${b.image_url?'photo uploaded':'no uploaded photo'}</div></div><div class="a"><button class="btn sm" data-act="edit" data-id="${b.id}">Edit</button></div></div>`).join(''):'<p>No bands yet.</p>'}`;
+}
+function bandForm(){
+  const isNew=S.edit==='new';
+  const b=isNew?{published:true,sort_order:0}:S.bands.find(x=>x.id===S.edit);
+  if(!b){S.edit=null;return bandList()}
+  const note=(S.notes.find(n=>n.band_id===b.id)||{}).note||'';
+  const pic=b.image_url||b.bandcamp_image_url||'';
+  return `<form class="card" data-form="band" data-id="${isNew?'':b.id}">
+  <h2 class="disp" style="margin-bottom:18px">${isNew?'Add a band':'Edit '+esc(b.name)}</h2>
+  <div class="g2">${F('Band name','name',b.name,{req:1})}${F('Where from','location',b.location,{ph:'Peterborough, UK'})}</div>
+  ${S.admin&&!isNew?F('Web address name (slug)','slug',b.slug,{hint:'Used in the page link. Changing it breaks old links to this band.'}):''}
+  ${F('About the band','bio',b.bio,{area:1,rows:6,hint:'Plain text. A blank line starts a new paragraph.'})}
+  <div class="f"><span class="lab">Photo</span>${pic?`<img class="pre" src="${esc(pic)}" alt="">`:''}<input type="file" name="photo" accept="image/*"><small>Square-ish works best. It's shrunk automatically. Leave empty to keep the current one.</small></div>
+  <div class="g2">${F('Bandcamp','bandcamp_url',b.bandcamp_url,{type:'url',ph:'https://…'})}${F('Instagram','instagram_url',b.instagram_url,{type:'url',ph:'https://…'})}
+  ${F('Facebook','facebook_url',b.facebook_url,{type:'url',ph:'https://…'})}${F('Spotify','spotify_url',b.spotify_url,{type:'url',ph:'https://…'})}
+  ${F('YouTube','youtube_url',b.youtube_url,{type:'url',ph:'https://…'})}${F('Website','website_url',b.website_url,{type:'url',ph:'https://…'})}</div>
+  ${S.admin?`<div class="g2"><div class="f"><span class="lab">Show on the site</span><label class="chk"><input type="checkbox" name="published" ${b.published?'checked':''}> Published</label></div>${F('Order on roster','sort_order',b.sort_order,{type:'number',hint:'Lower numbers come first.'})}</div>
+  ${F('Private note (only admins see this)','note',note,{area:1,rows:3})}`:''}
+  <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn red" type="submit">Save</button><button class="btn" type="button" data-act="cancel">Cancel</button>${S.admin&&!isNew?`<button class="btn" type="button" data-act="delBand" data-id="${b.id}" style="margin-left:auto">Delete band</button>`:''}</div>
+  </form>`;
+}
+async function shrink(file){
+  const url=URL.createObjectURL(file);
+  try{
+    const img=await new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=()=>no(new Error("Couldn't read that image"));i.src=url});
+    const k=Math.min(1,1000/Math.max(img.width,img.height));
+    const c=document.createElement('canvas');c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);
+    const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(img,0,0,c.width,c.height);
+    return await new Promise((ok,no)=>c.toBlob(b=>b?ok(b):no(new Error('Image conversion failed')),'image/jpeg',.85));
+  }finally{URL.revokeObjectURL(url)}
+}
+async function saveBand(form){
+  const id=form.dataset.id,d=new FormData(form);
+  const row={name:nul(d.get('name')),location:nul(d.get('location')),bio:nul(d.get('bio')),
+    bandcamp_url:link(d.get('bandcamp_url')),instagram_url:link(d.get('instagram_url')),facebook_url:link(d.get('facebook_url')),
+    spotify_url:link(d.get('spotify_url')),youtube_url:link(d.get('youtube_url')),website_url:link(d.get('website_url'))};
+  if(!row.name)throw new Error('The band needs a name');
+  if(S.admin){row.published=d.has('published');row.sort_order=parseInt(d.get('sort_order'),10)||0}
+  let bandId=id;
+  if(!id){row.slug=slugify(row.name);bandId=ck(await db.from('bands').insert(row).select('id').single()).id}
+  else{if(S.admin&&d.get('slug'))row.slug=slugify(d.get('slug'));ck(await db.from('bands').update(row).eq('id',id))}
+  const file=form.photo.files[0];
+  if(file){
+    const blob=await shrink(file);
+    const path=bandId+'/'+Date.now()+'.jpg';
+    ck(await db.storage.from('band-images').upload(path,blob,{contentType:'image/jpeg'}));
+    const pub=db.storage.from('band-images').getPublicUrl(path).data.publicUrl;
+    ck(await db.from('bands').update({image_url:pub}).eq('id',bandId));
+  }
+  if(S.admin){
+    const note=nul(d.get('note'));
+    if(note)ck(await db.from('band_notes').upsert({band_id:bandId,note}));
+    else ck(await db.from('band_notes').delete().eq('band_id',bandId));
+  }
+}
+
+/* ----- gigs ----- */
+const STATUS=[['on_sale','On sale'],['sold_out','Sold out'],['free','Free'],['cancelled','Cancelled']];
+const canGig=g=>S.admin||g.created_by===S.user.id;
+const lineupText=g=>(g.gig_acts||[]).slice().sort((a,b)=>a.position-b.position).map(a=>a.bands?a.bands.name:a.act_name).join('\n');
+function gigRow(g){
+  const st=g.status!=='on_sale'?`<span class="tag ${g.status==='cancelled'?'bad':''}">${esc((STATUS.find(s=>s[0]===g.status)||[0,g.status])[1])}</span>`:'';
+  return `<div class="row"><div><div class="t">${esc(g.title)}${st}</div><div class="s">${fmt(g.event_date)} · ${esc(g.venue_name||'Venue TBC')}${g.time_text?' · '+esc(g.time_text):''}</div></div>
+  <div class="a"><button class="btn sm" data-act="dupGig" data-id="${g.id}">Copy</button>${canGig(g)?`<button class="btn sm" data-act="edit" data-id="${g.id}">Edit</button>`:''}</div></div>`;
+}
+function gigList(){
+  const mineOnly=S.admin?S.gigs:S.gigs.filter(g=>g.created_by===S.user.id);
+  const t=today(),up=mineOnly.filter(g=>g.event_date>=t).sort((a,b)=>a.event_date<b.event_date?-1:1),past=mineOnly.filter(g=>g.event_date<t);
+  return `<div class="bar"><h2 class="disp">Gigs</h2><button class="btn red" data-act="new">+ Add a gig</button></div>
+  ${S.admin?'':'<p class="note">You see the gigs you added. Anyone can copy a gig as a starting point for a new one.</p>'}
+  <h3 class="disp" style="font-size:22px;margin:8px 0 10px">Coming up</h3>${up.length?up.map(gigRow).join(''):'<p style="margin-bottom:20px">Nothing coming up. Add one!</p>'}
+  <h3 class="disp" style="font-size:22px;margin:30px 0 10px">Past</h3>${past.length?past.map(gigRow).join(''):'<p>None yet.</p>'}`;
+}
+function gigForm(){
+  const isNew=S.edit==='new'||(S.edit&&S.edit.copy);
+  const src=S.edit&&S.edit.copy?S.gigs.find(g=>g.id===S.edit.copy):(isNew?null:S.gigs.find(g=>g.id===S.edit));
+  if(!isNew&&!src){S.edit=null;return gigList()}
+  const g=src?Object.assign({},src,S.edit.copy?{event_date:'',id:null}:{}):{status:'on_sale'};
+  const names=S.bands.map(b=>esc(b.name)).join(', ');
+  return `<form class="card" data-form="gig" data-id="${isNew?'':g.id}">
+  <h2 class="disp" style="margin-bottom:18px">${isNew?(S.edit.copy?'Copy of a gig':'Add a gig'):'Edit gig'}</h2>
+  <div class="g2">${F('Gig title','title',g.title,{req:1,ph:'East Angrier #3'})}${F('Series (optional)','series',g.series,{ph:'East Angrier'})}
+  ${F('Date','event_date',g.event_date,{type:'date',req:1})}${F('Time','time_text',g.time_text,{ph:'Doors 7pm'})}
+  ${F('Venue','venue_name',g.venue_name,{ph:'The Ostrich'})}${F('Venue address','venue_address',g.venue_address)}
+  ${F('Price','price_text',g.price_text,{ph:'£6 adv / £8 door'})}${F('Ticket link','ticket_url',g.ticket_url,{type:'url',ph:'https://…'})}</div>
+  <div class="f"><label for="status">Status</label><select id="status" name="status">${STATUS.map(s=>`<option value="${s[0]}"${g.status===s[0]?' selected':''}>${s[1]}</option>`).join('')}</select></div>
+  ${F('Line-up, one act per line, in running order','lineup',lineupText(g),{area:1,rows:6,hint:'Type a roster band exactly as named and it links to their page. Anything else is shown as a guest act. Roster: '+names})}
+  ${F('Extra notes (optional)','notes',g.notes,{area:1,rows:3})}
+  <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn red" type="submit">Save gig</button><button class="btn" type="button" data-act="cancel">Cancel</button>${!isNew?`<button class="btn" type="button" data-act="delGig" data-id="${g.id}" style="margin-left:auto">Delete gig</button>`:''}</div>
+  </form>`;
+}
+async function saveGig(form){
+  const id=form.dataset.id,d=new FormData(form);
+  const row={title:nul(d.get('title')),series:nul(d.get('series')),event_date:nul(d.get('event_date')),time_text:nul(d.get('time_text')),
+    venue_name:nul(d.get('venue_name')),venue_address:nul(d.get('venue_address')),price_text:nul(d.get('price_text')),
+    ticket_url:link(d.get('ticket_url')),status:d.get('status'),notes:nul(d.get('notes'))};
+  if(!row.title||!row.event_date)throw new Error('A gig needs a title and a date');
+  let gid=id;
+  if(!id){row.created_by=S.user.id;gid=ck(await db.from('gigs').insert(row).select('id').single()).id}
+  else ck(await db.from('gigs').update(row).eq('id',id));
+  const byName=new Map(S.bands.map(b=>[b.name.toLowerCase(),b.id]));
+  const acts=(d.get('lineup')||'').split('\n').map(s=>s.trim()).filter(Boolean).map((l,i)=>{const b=byName.get(l.toLowerCase());return b?{gig_id:gid,band_id:b,position:i}:{gig_id:gid,act_name:l,position:i}});
+  ck(await db.from('gig_acts').delete().eq('gig_id',gid));
+  if(acts.length)ck(await db.from('gig_acts').insert(acts));
+}
+
+/* ----- releases (admin) ----- */
+function releaseList(){
+  return `<div class="bar"><h2 class="disp">Releases</h2><button class="btn red" data-act="new">+ Add a release</button></div>
+  ${S.releases.length?S.releases.map(r=>`<div class="row"><div><div class="t">${esc(r.title)}</div><div class="s">${esc(r.artist_text||'')}${r.released_text?' · '+esc(r.released_text):''}</div></div><div class="a"><button class="btn sm" data-act="edit" data-id="${r.id}">Edit</button></div></div>`).join(''):'<p>No releases yet.</p>'}`;
+}
+function releaseForm(){
+  const isNew=S.edit==='new';
+  const r=isNew?{release_bands:[]}:S.releases.find(x=>x.id===S.edit);
+  if(!r){S.edit=null;return releaseList()}
+  const on=new Set((r.release_bands||[]).map(x=>x.band_id));
+  const bl=S.bands.slice().sort((a,b)=>a.name.localeCompare(b.name));
+  return `<form class="card" data-form="release" data-id="${isNew?'':r.id}">
+  <h2 class="disp" style="margin-bottom:18px">${isNew?'Add a release':'Edit '+esc(r.title)}</h2>
+  <div class="g2">${F('Title','title',r.title,{req:1})}${F('Artist as shown','artist_text',r.artist_text,{ph:'Das Kapitans, or Various artists'})}
+  ${F('Type','type',r.type,{ph:'album, EP, compilation, live'})}${F('Released (as shown)','released_text',r.released_text,{ph:'Sep 2023'})}
+  ${F('Release date (for ordering)','released_date',r.released_date,{type:'date'})}${F('Label','label',r.label,{ph:'Socks On Records'})}
+  ${F('Bandcamp link','bandcamp_url',r.bandcamp_url,{type:'url',ph:'https://…'})}${F('Cover image link','cover_url',r.cover_url,{type:'url',ph:'https://…'})}</div>
+  <div class="f"><span class="lab">Which roster bands are on it?</span><div class="checks">${bl.map(b=>`<label class="chk"><input type="checkbox" name="rb" value="${b.id}"${on.has(b.id)?' checked':''}> ${esc(b.name)}</label>`).join('')}</div></div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn red" type="submit">Save release</button><button class="btn" type="button" data-act="cancel">Cancel</button>${!isNew?`<button class="btn" type="button" data-act="delRelease" data-id="${r.id}" style="margin-left:auto">Delete release</button>`:''}</div>
+  </form>`;
+}
+async function saveRelease(form){
+  const id=form.dataset.id,d=new FormData(form);
+  const row={title:nul(d.get('title')),artist_text:nul(d.get('artist_text')),type:nul(d.get('type')),released_text:nul(d.get('released_text')),
+    released_date:nul(d.get('released_date')),label:nul(d.get('label')),bandcamp_url:link(d.get('bandcamp_url')),cover_url:link(d.get('cover_url'))};
+  if(!row.title)throw new Error('A release needs a title');
+  let rid=id;
+  if(!id)rid=ck(await db.from('releases').insert(row).select('id').single()).id;
+  else ck(await db.from('releases').update(row).eq('id',id));
+  ck(await db.from('release_bands').delete().eq('release_id',rid));
+  const links=d.getAll('rb').map(b=>({release_id:rid,band_id:b}));
+  if(links.length)ck(await db.from('release_bands').insert(links));
+}
+
+/* ----- people (admin) ----- */
+function peopleView(){
+  const bn=id=>(S.bands.find(b=>b.id===id)||{name:'?'}).name;
+  const opts=S.bands.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('');
+  return `<div class="bar"><h2 class="disp">People</h2></div>
+  <div class="note"><strong>To add someone:</strong> in Supabase go to Authentication, Users, Invite user, and enter their email. They appear here straight away. Then link them to their band below. Anyone not invited can't sign in.</div>
+  ${S.people.map(p=>{
+    const ms=S.members.filter(m=>m.user_id===p.id);
+    return `<div class="row" style="align-items:flex-start"><div style="min-width:240px;flex:1"><div class="t" style="text-transform:none;font-family:'Archivo',sans-serif;font-weight:700;font-size:18px">${esc(p.email||p.id)}${p.id===S.user.id?'<span class="tag">You</span>':''}</div>
+    <label class="chk"><input type="checkbox" data-act="toggleAdmin" data-id="${p.id}" ${p.is_admin?'checked':''} ${p.id===S.user.id?'disabled':''}> Admin (can edit everything)</label></div>
+    <div style="flex:2;min-width:260px"><div class="lab" style="margin-bottom:6px">Can edit these bands</div>
+    ${ms.length?ms.map(m=>`<span class="chip">${esc(bn(m.band_id))}<button title="Remove" aria-label="Remove ${esc(bn(m.band_id))}" data-act="rmMember" data-u="${p.id}" data-b="${m.band_id}">×</button></span>`).join(''):'<div class="s" style="margin-bottom:6px">None</div>'}
+    <div style="display:flex;gap:8px;margin-top:6px"><select aria-label="Band to add">${opts}</select><button class="btn sm" data-act="addMember" data-u="${p.id}">Add</button></div></div></div>`}).join('')}`;
+}
+
+/* ---------- events ---------- */
+app.addEventListener('click',e=>{
+  const t=e.target.closest('[data-act]');if(!t||t.tagName==='INPUT')return;
+  const a=t.dataset.act,id=t.dataset.id;
+  run(async()=>{
+    if(a==='tab'){S.tab=t.dataset.tab;S.edit=null;render()}
+    else if(a==='new'){S.edit='new';render()}
+    else if(a==='edit'){S.edit=id;render()}
+    else if(a==='cancel'){S.edit=null;render()}
+    else if(a==='dupGig'){S.edit={copy:id};render()}
+    else if(a==='signout'){await db.auth.signOut()}
+    else if(a==='delBand'){if(confirm('Delete this band for good? Their gigs stay, but lose the link to the band.')){ck(await db.from('bands').delete().eq('id',id));S.edit=null;await reload();toast('Band deleted')}}
+    else if(a==='delGig'){if(confirm('Delete this gig?')){ck(await db.from('gigs').delete().eq('id',id));S.edit=null;await reload();toast('Gig deleted')}}
+    else if(a==='delRelease'){if(confirm('Delete this release?')){ck(await db.from('releases').delete().eq('id',id));S.edit=null;await reload();toast('Release deleted')}}
+    else if(a==='addMember'){const sel=t.parentElement.querySelector('select');if(!sel.value)return;ck(await db.from('band_members').upsert({band_id:sel.value,user_id:t.dataset.u}));await reload();toast('Linked')}
+    else if(a==='rmMember'){ck(await db.from('band_members').delete().eq('band_id',t.dataset.b).eq('user_id',t.dataset.u));await reload();toast('Removed')}
+  });
+});
+app.addEventListener('change',e=>{
+  const t=e.target;
+  if(t.dataset&&t.dataset.act==='toggleAdmin')run(async()=>{
+    ck(await db.from('profiles').update({is_admin:t.checked}).eq('id',t.dataset.id));await reload();toast(t.checked?'Now an admin':'No longer an admin');
+  });
+});
+app.addEventListener('submit',e=>{
+  const f=e.target.closest('form[data-form]');if(!f)return;
+  e.preventDefault();
+  const kind=f.dataset.form,btn=f.querySelector('button[type=submit]');
+  if(btn)btn.disabled=true;
+  run(async()=>{
+    try{
+      if(kind==='magic'){
+        const r=await db.auth.signInWithOtp({email:f.email.value.trim(),options:{shouldCreateUser:false,emailRedirectTo:location.origin+location.pathname}});
+        if(r.error)throw r.error;
+        f.innerHTML='<p><strong>Check your email.</strong> Click the link in it and you\'ll be signed in. It can take a minute to arrive, check spam too.</p>';
+      }else if(kind==='pw'){
+        const r=await db.auth.signInWithPassword({email:f.email.value.trim(),password:f.password.value});
+        if(r.error)throw r.error;
+      }else if(kind==='setpw'){
+        const r=await db.auth.updateUser({password:f.password.value});
+        if(r.error)throw r.error;f.reset();toast('Password saved');
+      }else if(kind==='band'){await saveBand(f);S.edit=null;await reload();toast('Saved. The site shows it straight away.')}
+      else if(kind==='gig'){await saveGig(f);S.edit=null;await reload();toast('Gig saved')}
+      else if(kind==='release'){await saveRelease(f);S.edit=null;await reload();toast('Release saved')}
+    }finally{if(btn&&document.body.contains(btn))btn.disabled=false}
+  });
+});
+
+/* ---------- start ---------- */
+(function(){const m=location.hash.match(/error_description=([^&]+)/);if(m)setTimeout(()=>toast(decodeURIComponent(m[1].replace(/\+/g,' '))+'. Ask for a new link or use a password.',true),300)})();
+let started=false,lastKey='';
+db.auth.onAuthStateChange((ev,session)=>{
+  // don't call the API inside this callback, defer it
+  setTimeout(()=>run(async()=>{
+    const u=session&&session.user||null,key=u?u.id:'';
+    if(started&&key===lastKey){if(u)S.user=u;return}
+    started=true;lastKey=key;S.user=u;S.ready=false;S.edit=null;
+    render();
+    if(!u)return;
+    if(location.hash.includes('access_token'))history.replaceState(null,'',location.pathname);
+    await load();render();
+  }),0);
+});
+</script>
+</body>
+</html>
