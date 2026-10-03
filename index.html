@@ -64,6 +64,22 @@ img{display:block;max-width:100%}
 .split{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:56px;align-items:center}
 .split.rev{grid-template-columns:minmax(0,7fr) minmax(0,5fr);align-items:start}
 .cover{aspect-ratio:1/1;border:2px solid var(--ink);display:flex;flex-direction:column;justify-content:space-between;padding:16px;box-shadow:4px 4px 0 var(--ink)}
+.yt{position:relative;display:block;width:100%;aspect-ratio:16/9;padding:0;border:2px solid var(--ink);box-shadow:5px 5px 0 var(--ink);background:var(--ink);cursor:pointer;overflow:hidden}
+.yt img{width:100%;height:100%;object-fit:cover;display:block;opacity:.88;transition:opacity .15s}
+.yt:hover img{opacity:1}
+.yt .play{position:absolute;left:50%;top:50%;width:72px;height:72px;margin:-36px 0 0 -36px;background:var(--red);border:3px solid var(--paper);box-shadow:3px 3px 0 var(--ink)}
+.yt .play:after{content:"";position:absolute;left:27px;top:19px;border-style:solid;border-width:15px 0 15px 24px;border-color:transparent transparent transparent var(--paper)}
+.yt:focus-visible{outline:3px solid var(--red);outline-offset:3px}
+.ytf{display:block;width:100%;aspect-ratio:16/9;border:2px solid var(--ink);box-shadow:5px 5px 0 var(--ink);background:#000}
+.vcard h3{margin:18px 0 4px}
+.sess{padding:0;margin-bottom:32px}
+.sess .top{padding:28px 32px 20px}
+.sess .panel{padding:0 32px 32px}
+.sess .panel iframe{border:0;width:100%;display:block}
+.sess .acts{display:flex;gap:12px;flex-wrap:wrap;margin-top:20px}
+.subs{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+.subs .field{flex:1 1 220px;margin:0}
+.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
 .grow{display:grid;grid-template-columns:150px minmax(0,1fr);gap:8px 24px;align-items:center;padding:20px 24px;border-bottom:2px solid var(--ink)}
 .grow:last-child{border-bottom:0}
 .tabs{display:flex;gap:12px;flex-wrap:wrap;margin-top:28px}
@@ -104,6 +120,8 @@ img{display:block;max-width:100%}
 <a data-p="roster" href="#/roster">Roster</a>
 <a data-p="gigs" href="#/gigs">Gigs</a>
 <a data-p="releases" href="#/releases">Releases</a>
+<a data-p="videos" href="#/videos">Videos</a>
+<a data-p="sessions" href="#/sessions">Sessions</a>
 <a class="ext" href="https://socksonrecords.bigcartel.com/">Merch</a>
 <a data-p="contact" href="#/contact">Contact</a>
 <a class="ext" href="https://www.instagram.com/socksongraphics/">Graphics</a>
@@ -116,7 +134,7 @@ img{display:block;max-width:100%}
 <footer class="footer"><div class="wrap">
 <div class="g3" style="align-items:start">
 <div><img data-logo alt="Socks On Records" style="width:200px"><p style="margin-top:16px;max-width:300px">DIY label, gig promoters and community. Totally non-profit.</p></div>
-<div><h3 class="disp">Explore</h3><a class="flink" href="#/roster">Roster</a><a class="flink" href="#/gigs">Gigs</a><a class="flink" href="#/releases">Releases</a><a class="flink" href="https://socksonrecords.bigcartel.com/">Merch</a></div>
+<div><h3 class="disp">Explore</h3><a class="flink" href="#/roster">Roster</a><a class="flink" href="#/gigs">Gigs</a><a class="flink" href="#/releases">Releases</a><a class="flink" href="#/videos">Videos</a><a class="flink" href="#/sessions">Sessions</a><a class="flink" href="https://socksonrecords.bigcartel.com/">Merch</a></div>
 <div><h3 class="disp">Get in touch</h3><a class="flink" href="mailto:socksonrecords@gmail.com">socksonrecords@gmail.com</a><a class="flink" href="https://www.instagram.com/socks_on_records/">Instagram</a><a class="flink" href="https://www.instagram.com/socksongraphics/">Socks On Graphics</a></div>
 </div>
 <div class="mono" style="margin-top:40px;padding-top:20px;border-top:1px solid rgba(244,240,230,.25);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><span>Peterborough &amp; King's Lynn &middot; East of England</span><span>&copy; Socks On Records &middot; <a href="admin.html" style="opacity:.7">Band login</a></span></div>
@@ -294,6 +312,10 @@ function band(slug){
   const lpHtml=lp?`<div style="margin-bottom:36px;max-width:640px;border:2px solid var(--ink);box-shadow:5px 5px 0 var(--ink);background:var(--ink)"><p class="mono" style="color:var(--sky);padding:10px 14px 0">Listen &middot; ${esc(lp.title)}</p>${player(lp.embed_url,lp.title)}</div>`:'';
   const relHtml=rels.length?lpHtml+`<div class="g4">${rels.map((r,i)=>{const c=COLS[i%4];const u=safeUrl(r.url)||'https://socksonrecords.bandcamp.com/music';return `<div><a href="${u}" style="text-decoration:none">${cover(r.title,c[0],c[1],28,r.cover_url)}</a><p class="mono" style="margin-top:12px">${esc(r.type||'Release')}${r.released_text?' &middot; '+esc(r.released_text):''}</p></div>`}).join('')}</div>`
     :`<div class="card" style="padding:28px"><p class="ph">[Releases appear here once added]</p></div>`;
+  const own=ytId(b.video_url),bv=[];
+  if(own)bv.push({id:own,title:b.name});
+  VIDEOS.filter(v=>v.bands&&v.bands.slug===b.slug).forEach(v=>{const id=ytId(v.youtube_url);if(id&&id!==own)bv.push({id,title:v.title})});
+  const vidSec=bv.length?`<section class="sec" style="padding:64px 0"><div class="wrap"><div class="sec-head"><h2 class="disp" style="font-size:48px">Videos</h2><a class="btn" href="#/videos">All videos</a></div><div class="g3">${bv.map(v=>videoCard(v,false)).join('')}</div></div></section>`:'';
   const gs=GIGS.filter(g=>g.acts&&g.acts.some(x=>x.slug===b.slug)).sort((x,y)=>x.event_date<y.event_date?1:-1);
   const gigHtml=gs.length?`<div class="card">${gs.map(g=>gigRow(g,false)).join('')}</div>`:`<div class="card" style="padding:28px"><p class="ph">[This band's gigs appear here once added]</p></div>`;
   const mu=merchUrl(b);
@@ -319,6 +341,7 @@ function band(slug){
 <div style="display:flex;gap:14px;flex-wrap:wrap">${btns}</div>
 </div></div></div></section>
 <section class="sec" style="padding:64px 0"><div class="wrap"><div class="sec-head"><h2 class="disp" style="font-size:48px">Releases</h2><div class="stripes"></div></div>${relHtml}</div></section>
+${vidSec}
 <section class="sec" style="padding:64px 0;background:var(--sky);border-top:5px solid var(--ink);border-bottom:5px solid var(--ink)"><div class="wrap"><div class="sec-head"><h2 class="disp" style="font-size:48px">Gigs</h2><a class="btn" href="#/gigs">All gigs</a></div>${gigHtml}</div></section>
 <section class="sec" style="padding:64px 0"><div class="wrap"><div class="sec-head"><h2 class="disp" style="font-size:48px">Merch</h2><a class="btn" href="https://socksonrecords.bigcartel.com/">Whole shop &#8599;</a></div>${merch}</div></section>`;
 }
@@ -367,7 +390,8 @@ function releases(){
 <div class="g4" id="relgrid">${relCards(RELFILTER)}</div>
 </div></section>`;
 }
-document.addEventListener('change',e=>{if(e.target&&e.target.id==='relfilter'){RELFILTER=e.target.value;const g=document.getElementById('relgrid'),c=document.getElementById('relcount');if(g)g.innerHTML=relCards(RELFILTER);if(c)c.textContent=relCount(RELFILTER)}});
+document.addEventListener('change',e=>{if(e.target&&e.target.id==='vidfilter'){VIDFILTER=e.target.value;const g=document.getElementById('vidgrid');if(g)g.innerHTML=videoGrid(VIDFILTER)}
+  if(e.target&&e.target.id==='relfilter'){RELFILTER=e.target.value;const g=document.getElementById('relgrid'),c=document.getElementById('relcount');if(g)g.innerHTML=relCards(RELFILTER);if(c)c.textContent=relCount(RELFILTER)}});
 
 function contact(){
   return head('Say hello','Contact','Got a gig in mind, a band that should be on the roster, or just want to say hello? Drop us a line.')+`
@@ -387,7 +411,87 @@ function contact(){
 <a class="linkrow" href="https://www.instagram.com/socks_on_records/">${ICON_IG}Instagram</a>
 <a class="linkrow" href="https://www.instagram.com/socksongraphics/">${ICON_IG}Socks On Graphics</a>
 <a class="linkrow" href="https://socksonrecords.bigcartel.com/"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M4 7h16l-1.5 13h-13z"/><path d="M8 7a4 4 0 018 0"/></svg>Merch shop</a>
-</div></div></div></section>`;
+</div></div></div></section>`+newsletter();
+}
+
+
+/* ---------- videos, sessions, newsletter ---------- */
+let VIDEOS=[], SESSIONS=[];
+const rawUrl=u=>/^https?:\/\//i.test(u||'')?String(u).trim():'';
+function ytId(u){const m=String(u||'').trim().match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?(?:[^#]*&)?v=|embed\/|shorts\/|live\/|v\/))([A-Za-z0-9_-]{11})/);return m?m[1]:null}
+function ytPoster(id,title){return `<button type="button" class="yt" data-yt="${esc(id)}" aria-label="Play ${esc(title)}"><img src="https://i.ytimg.com/vi/${esc(id)}/hqdefault.jpg" alt="" loading="lazy"><span class="play"></span></button>`}
+function audioFrame(u,title){
+  u=rawUrl(u);if(!u)return '';
+  const fr=(src,h)=>`<iframe data-src="${esc(src)}" style="height:${h}px" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" title="${esc(title)}"></iframe>`;
+  let m=u.match(/^https:\/\/open\.spotify\.com\/(?:intl-[a-z]+\/)?(episode|show|track|album|playlist)\/([A-Za-z0-9]+)/);
+  if(m)return fr(`https://open.spotify.com/embed/${m[1]}/${m[2]}`,m[1]==='episode'||m[1]==='track'?152:352);
+  if(/^https:\/\/(?:www\.)?soundcloud\.com\//.test(u))return fr('https://w.soundcloud.com/player/?url='+encodeURIComponent(u)+'&color=%2386AEB9&auto_play=false&hide_related=true&show_comments=false&show_teaser=false',166);
+  m=u.match(/^https:\/\/podcasts\.apple\.com\/(.+)$/);
+  if(m)return fr('https://embed.podcasts.apple.com/'+m[1],175);
+  return '';
+}
+function allVideos(){
+  const out=[];
+  VIDEOS.forEach(v=>{const id=ytId(v.youtube_url);if(id)out.push({id,title:v.title,slug:v.bands?v.bands.slug:null,band:v.bands?v.bands.name:''})});
+  BANDS.forEach(b=>{const id=ytId(b.video_url);if(id&&!out.some(o=>o.id===id))out.push({id,title:b.name,slug:b.slug,band:b.name})});
+  return out;
+}
+function videoCard(v,showBand){
+  return `<article class="vcard">${ytPoster(v.id,v.title)}<h3 class="disp" style="font-size:22px">${esc(v.title)}</h3>${showBand&&v.band&&v.band!==v.title?`<p class="mono">${v.slug?`<a href="#/band/${esc(v.slug)}">${esc(v.band)}</a>`:esc(v.band)}</p>`:(v.slug&&showBand?`<p class="mono"><a href="#/band/${esc(v.slug)}">Visit the band page &rarr;</a></p>`:'')}</article>`;
+}
+let VIDFILTER='';
+function videoGrid(f){
+  const list=allVideos().filter(v=>!f||v.slug===f);
+  return list.length?list.map(v=>videoCard(v,true)).join(''):'<p class="mono" style="grid-column:1/-1">Nothing here yet.</p>';
+}
+function videosPage(){
+  const all=allVideos(),slugs=new Set(all.map(v=>v.slug).filter(Boolean));
+  const opts=BANDS.filter(b=>slugs.has(b.slug)).slice().sort((x,y)=>x.name.localeCompare(y.name)).map(b=>`<option value="${esc(b.slug)}"${VIDFILTER===b.slug?' selected':''}>${esc(b.name)}</option>`).join('');
+  return head('Press play','Videos','Live clips, music videos and bits of footage from the bands on the label.')+`
+<section style="padding:56px 0 96px"><div class="wrap">
+${all.length?`<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:32px"><label for="vidfilter" class="mono">Show</label><select id="vidfilter" style="font:inherit;font-size:17px;min-height:48px;padding:8px 14px;border:2px solid var(--ink);background:var(--paper);color:var(--ink);max-width:100%"><option value="">All bands</option>${opts}</select></div>
+<div class="g3" id="vidgrid">${videoGrid(VIDFILTER)}</div>`:`<div class="card" style="padding:32px"><p>Videos are on the way. Check back soon.</p></div>`}
+</div></section>`;
+}
+function sessionCard(s,open){
+  const vid=ytId(s.video_url),au=audioFrame(s.audio_url,s.title),link=rawUrl(s.audio_url);
+  const who=s.bands?`<a href="#/band/${esc(s.bands.slug)}">${esc(s.bands.name)}</a>`:esc(s.band_text||'');
+  const d=s.session_date?fmtLong(s.session_date):'';
+  const key=esc(s.id);
+  return `<article class="card sess"><div class="top"><p class="mono" style="margin-bottom:8px">${[d,who].filter(Boolean).join(' &middot; ')}</p><h2 class="disp" style="font-size:38px;margin-bottom:12px">${esc(s.title)}</h2>${s.summary?`<p style="max-width:680px;white-space:pre-line">${esc(s.summary)}</p>`:''}
+<div class="acts">${vid?`<button class="btn red" type="button" data-reveal="v-${key}" aria-expanded="${open}">Watch the session</button>`:''}${au?`<button class="btn" type="button" data-reveal="a-${key}" aria-expanded="${open}">Listen here</button>`:(link?`<a class="btn" href="${esc(link)}">Listen &#8599;</a>`:'')}</div></div>
+${vid?`<div class="panel" id="v-${key}"${open?'':' hidden'}>${ytPoster(vid,s.title)}</div>`:''}
+${au?`<div class="panel" id="a-${key}"${open?'':' hidden'}>${au}</div>`:''}</article>`;
+}
+function sessionsPage(){
+  return head('A band plays, then we chat','Socks On Sessions',"Our sessions are part live video, part podcast. A band plays in the room, then gets interviewed. Watch it, or put it in your ears.")+`
+<section style="padding:56px 0 96px"><div class="wrap" style="max-width:920px">
+${SESSIONS.length?SESSIONS.map((s,i)=>sessionCard(s,i===0)).join(''):`<div class="card" style="padding:32px"><p>The first sessions are being edited. Check back soon.</p></div>`}
+</div></section>`;
+}
+function newsletter(){
+  return `<section style="padding:0 0 96px"><div class="wrap"><div class="card" style="padding:36px 32px;max-width:760px"><div class="tape"></div>
+<h2 class="disp" style="font-size:36px;margin-bottom:8px">Get the gig news</h2>
+<p style="margin-bottom:20px">New gigs, releases and sessions, straight to your inbox. Not often, never spam.</p>
+<form id="n-form" class="subs" novalidate><div class="field"><label for="n-email">Your email</label><input id="n-email" type="email" autocomplete="email" required></div>
+<div class="hp" aria-hidden="true"><label>Leave this empty<input id="n-web" tabindex="-1" autocomplete="off"></label></div>
+<button class="btn red" type="submit" style="margin-bottom:0">Sign me up</button></form>
+<p id="n-note" class="mono" role="status" style="margin-top:14px" hidden></p>
+<p class="mono" style="margin-top:14px;color:var(--muted);font-size:12px;text-transform:none">We only use your email to send Socks On news, and we never share it. Reply &ldquo;unsubscribe&rdquo; to any email and you're off the list.</p>
+</div></div></section>`;
+}
+async function subscribe(form){
+  const note=document.getElementById('n-note'),btn=form.querySelector('button'),em=form.querySelector('#n-email').value.trim();
+  const say=(t,bad)=>{note.hidden=false;note.textContent=t;note.style.color=bad?'var(--red)':'var(--ink)'};
+  if(form.querySelector('#n-web').value){say("You're on the list. Thanks!");return}
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){say('That email address does not look right.',true);return}
+  btn.disabled=true;
+  try{
+    const r=await fetch(SUPABASE_URL+'/rest/v1/subscribers',{method:'POST',headers:{apikey:SUPABASE_KEY,'Content-Type':'application/json',Prefer:'return=minimal'},body:JSON.stringify({email:em,source:'website'})});
+    if(r.ok||r.status===409){say(r.ok?"You're on the list. Thanks!":"You're already on the list. Thanks!");form.reset()}
+    else say('Something went wrong. Please try again, or email us.',true);
+  }catch(e){say('Something went wrong. Please try again, or email us.',true)}
+  btn.disabled=false;
 }
 
 /* ---------- router ---------- */
@@ -400,17 +504,26 @@ function route(){
   else if(page==='band') html=band(parts[1]);
   else if(page==='gigs') html=gigs();
   else if(page==='releases') html=releases();
+  else if(page==='videos') html=videosPage();
+  else if(page==='sessions') html=sessionsPage();
   else if(page==='contact') html=contact();
   else { html=home(); key='home'; }
   view.innerHTML=html;
+  view.querySelectorAll('.panel:not([hidden]) iframe[data-src]').forEach(i=>{i.src=i.dataset.src});
   document.querySelectorAll('.nav a[data-p]').forEach(x=>x.classList.toggle('on',x.dataset.p===(key==='band'?'roster':key)));
-  const names={home:'Home',roster:'Roster',band:'Band',gigs:'Gigs',releases:'Releases',contact:'Contact'};
+  const names={home:'Home',roster:'Roster',band:'Band',gigs:'Gigs',releases:'Releases',videos:'Videos',sessions:'Socks On Sessions',contact:'Contact'};
   document.title='Socks On Records - '+(names[key]||'Home');
   window.scrollTo(0,0);
   const f=document.getElementById('c-form');
   if(f) f.addEventListener('submit',e=>{e.preventDefault();document.getElementById('c-note').hidden=false;});
+  const nf=document.getElementById('n-form');
+  if(nf) nf.addEventListener('submit',e=>{e.preventDefault();subscribe(nf)});
 }
 document.addEventListener('click',e=>{
+  const yt=e.target.closest('[data-yt]');
+  if(yt){const f=document.createElement('iframe');f.className='ytf';f.src='https://www.youtube-nocookie.com/embed/'+yt.dataset.yt+'?autoplay=1&rel=0';f.allow='autoplay; encrypted-media; picture-in-picture; fullscreen';f.allowFullscreen=true;f.title='Video player';yt.replaceWith(f);return}
+  const rv=e.target.closest('[data-reveal]');
+  if(rv){const p=document.getElementById(rv.dataset.reveal);if(p){p.hidden=!p.hidden;rv.setAttribute('aria-expanded',String(!p.hidden));p.querySelectorAll('iframe[data-src]').forEach(i=>{if(!i.getAttribute('src'))i.src=i.dataset.src})}return}
   const s=e.target.closest('[data-scroll]');
   if(s){const t=document.getElementById(s.dataset.scroll); if(t) t.scrollIntoView({behavior:'smooth'}); document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===s));}
   const sh=e.target.closest('[data-share]');
@@ -432,16 +545,20 @@ async function loadLive(){
   const rb=document.getElementById('ribbon');
   try{
     const res=await Promise.all([
-      sb('bands?select=slug,name,location,bio,image_url,bandcamp_image_url,bandcamp_url,instagram_url,facebook_url,spotify_url,youtube_url,website_url,merch_url&published=eq.true&order=sort_order.asc,name.asc').catch(()=>sb('bands?select=slug,name,location,bio,image_url,bandcamp_image_url,bandcamp_url,instagram_url,facebook_url,spotify_url,youtube_url,website_url&published=eq.true&order=sort_order.asc,name.asc')),
+      (async()=>{const base='slug,name,location,bio,image_url,bandcamp_image_url,bandcamp_url,instagram_url,facebook_url,spotify_url,youtube_url,website_url',q='&published=eq.true&order=sort_order.asc,name.asc';
+        for(const extra of [',merch_url,video_url',',merch_url',',video_url','']){try{return await sb('bands?select='+base+extra+q)}catch(e){}}throw new Error('bands unavailable')})(),
       sb('gigs?select=id,title,series,event_date,time_text,venue_name,venue_address,price_text,ticket_url,status,poster_url,gig_acts(position,act_name,bands(slug,name))&order=event_date.desc').catch(()=>sb('gigs?select=id,title,series,event_date,time_text,venue_name,venue_address,price_text,ticket_url,status,gig_acts(position,act_name,bands(slug,name))&order=event_date.desc')),
       sb('releases?select=id,title,artist_text,type,released_text,released_date,bandcamp_url,cover_url,label,embed_url,release_bands(bands(slug))&order=released_date.desc.nullslast,title.asc').catch(()=>sb('releases?select=id,title,artist_text,type,released_text,released_date,bandcamp_url,cover_url,label,release_bands(bands(slug))&order=released_date.desc.nullslast,title.asc')),
-      sb('site_settings?select=value&key=eq.featured_release').catch(()=>[])
+      sb('site_settings?select=value&key=eq.featured_release').catch(()=>[]),
+      sb('videos?select=title,youtube_url,sort_order,bands(slug,name)&order=sort_order.asc,created_at.desc').catch(()=>[]),
+      sb('sessions?select=id,title,session_date,band_text,summary,video_url,audio_url,bands(slug,name)&order=session_date.desc.nullslast,created_at.desc').catch(()=>[])
     ]);
     if(!res[0].length) throw new Error('bands table is empty');
     BANDS=res[0];
     GIGS=res[1].map(g=>Object.assign({},g,{acts:(g.gig_acts||[]).slice().sort((x,y)=>x.position-y.position).map(x=>({slug:x.bands?x.bands.slug:null,name:x.bands?x.bands.name:x.act_name}))}));
     RELEASES=res[2].map(r=>({title:r.title,artist:r.artist_text||'',type:r.type,released_text:r.released_text,url:r.bandcamp_url,cover_url:r.cover_url,embed_url:r.embed_url,slugs:(r.release_bands||[]).map(x=>x.bands&&x.bands.slug).filter(Boolean)}));
     FEATURED=(res[3]&&res[3][0]&&res[3][0].value)||null;
+    VIDEOS=res[4]||[];SESSIONS=res[5]||[];
     LIVE=true;
     if(rb) rb.textContent='Draft design preview \u00b7 live data from Supabase \u00b7 anything in [brackets] is still to be filled in';
     route();

@@ -98,6 +98,10 @@ async function load(){
     S.people=ck(await db.from('profiles').select('*').order('email'));
     S.members=ck(await db.from('band_members').select('*'));
     S.notes=ck(await db.from('band_notes').select('*'));
+    const tryLoad=async q=>{const r=await q;return r.error?null:r.data};
+    S.videos=await tryLoad(db.from('videos').select('*,bands(name)').order('sort_order').order('created_at',{ascending:false}));
+    S.sessions=await tryLoad(db.from('sessions').select('*,bands(name)').order('session_date',{ascending:false,nullsFirst:false}));
+    S.subs=await tryLoad(db.from('subscribers').select('*').order('created_at',{ascending:false}));
     const st=await db.from('site_settings').select('*').eq('key','featured_release').maybeSingle();
     S.settings=st.error?null:(st.data||{value:{}});   // null = the 03 SQL hasn't been run yet
   }
@@ -125,7 +129,7 @@ function render(){
   if(!S.ready){app.innerHTML='<p class="mono">Loading…</p>';return}
   if(!S.profile){app.innerHTML=`<div class="card"><h2 class="disp" style="margin-bottom:10px">Something's off</h2><p>You're signed in, but there's no profile for you yet. Ask Roy to check your invite.</p></div>`;return}
   if(!S.admin&&!S.mine.length){app.innerHTML=`<div class="card"><h2 class="disp" style="margin-bottom:10px">You're in</h2><p>You're signed in, but you're not linked to a band yet. Ask Roy to link your login to your band and you'll be able to edit it here.</p></div>${accountView()}`;return}
-  const tabs=S.admin?[['bands','Bands'],['gigs','Gigs'],['releases','Releases'],['featured','Featured'],['people','People'],['account','Account']]:[['bands',S.mine.length>1?'My bands':'My band'],['gigs','Gigs'],['releases','Releases'],['account','Account']];
+  const tabs=S.admin?[['bands','Bands'],['gigs','Gigs'],['releases','Releases'],['featured','Featured'],['videos','Videos'],['sessions','Sessions'],['subs','Newsletter'],['people','People'],['account','Account']]:[['bands',S.mine.length>1?'My bands':'My band'],['gigs','Gigs'],['releases','Releases'],['account','Account']];
   if(!tabs.some(t=>t[0]===S.tab))S.tab='bands';
   const tb=`<div class="tabs" role="tablist">${tabs.map(t=>`<button role="tab" class="${S.tab===t[0]?'on':''}" data-act="tab" data-tab="${t[0]}">${t[1]}</button>`).join('')}</div>`;
   let body='';
@@ -133,6 +137,9 @@ function render(){
   else if(S.tab==='gigs')body=S.edit?gigForm():gigList();
   else if(S.tab==='releases')body=S.edit?releaseForm():releaseList();
   else if(S.tab==='featured')body=featuredView();
+  else if(S.tab==='videos')body=S.edit?videoForm():videosView();
+  else if(S.tab==='sessions')body=S.edit?sessionForm():sessionsView();
+  else if(S.tab==='subs')body=subsView();
   else if(S.tab==='people')body=peopleView();
   else if(S.tab==='account')body=accountView();
   app.innerHTML=tb+body;
@@ -176,6 +183,7 @@ function bandForm(){
   <div class="g2">${F('Bandcamp','bandcamp_url',b.bandcamp_url,{type:'url',ph:'https://…'})}${F('Instagram','instagram_url',b.instagram_url,{type:'url',ph:'https://…'})}
   ${F('Facebook','facebook_url',b.facebook_url,{type:'url',ph:'https://…'})}${F('Spotify','spotify_url',b.spotify_url,{type:'url',ph:'https://…'})}
   ${F('YouTube','youtube_url',b.youtube_url,{type:'url',ph:'https://…'})}${F('Website','website_url',b.website_url,{type:'url',ph:'https://…'})}
+  ${S.bands.length&&('video_url' in S.bands[0])?F('YouTube video','video_url',b.video_url,{type:'url',ph:'https://youtu.be/…',hint:'One video for the band page and the Videos page. Admins can add more on the Videos tab.'}):''}
   ${S.bands.length&&('merch_url' in S.bands[0])?F('Merch link','merch_url',b.merch_url,{type:'url',ph:defaultMerch(b.bandcamp_url)||'https://…',hint:'Leave blank to use the Bandcamp merch page'+(defaultMerch(b.bandcamp_url)?' ('+defaultMerch(b.bandcamp_url)+')':'')+'.'}):''}</div>
   ${S.admin?`<div class="g2"><div class="f"><span class="lab">Show on the site</span><label class="chk"><input type="checkbox" name="published" ${b.published?'checked':''}> Published</label></div>${F('Order on roster','sort_order',b.sort_order,{type:'number',hint:'Lower numbers come first.'})}</div>
   ${F('Private note (only admins see this)','note',note,{area:1,rows:3})}`:''}
@@ -192,6 +200,8 @@ async function shrink(file,max=1000){
     return await new Promise((ok,no)=>c.toBlob(b=>b?ok(b):no(new Error('Image conversion failed')),'image/jpeg',.85));
   }finally{URL.revokeObjectURL(url)}
 }
+function ytId(u){const m=String(u||'').trim().match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?(?:[^#]*&)?v=|embed\/|shorts\/|live\/|v\/))([A-Za-z0-9_-]{11})/);return m?m[1]:null}
+function ytLink(v){v=nul(v);if(!v)return null;const id=ytId(v);if(!id)throw new Error("That doesn't look like a YouTube video link. Copy it from the video's Share button, e.g. https://youtu.be/abc123");return 'https://www.youtube.com/watch?v='+id}
 const defaultMerch=u=>{try{return u?new URL(u).origin+'/merch':''}catch(e){return ''}};
 async function saveBand(form){
   const id=form.dataset.id,d=new FormData(form);
@@ -199,6 +209,7 @@ async function saveBand(form){
     bandcamp_url:link(d.get('bandcamp_url')),instagram_url:link(d.get('instagram_url')),facebook_url:link(d.get('facebook_url')),
     spotify_url:link(d.get('spotify_url')),youtube_url:link(d.get('youtube_url')),website_url:link(d.get('website_url'))};
   if(form.merch_url)row.merch_url=link(d.get('merch_url'));
+  if(form.video_url)row.video_url=ytLink(d.get('video_url'));
   if(!row.name)throw new Error('The band needs a name');
   if(S.admin){row.published=d.has('published');row.sort_order=parseInt(d.get('sort_order'),10)||0}
   let bandId=id;
@@ -363,6 +374,70 @@ async function saveFeatured(form){
   S.settings=Object.assign({},S.settings,{key:'featured_release',value:v});
 }
 
+
+/* ----- videos (admin) ----- */
+const setupNote=()=>`<div class="note"><strong>One setup step first.</strong> Run <code>07-videos-sessions-newsletter.sql</code> (in the supabase folder) in the Supabase SQL Editor, then reload this page.</div>`;
+const bandSelect=(sel,name)=>`<div class="f"><label for="${name}">Band (optional)</label><select id="${name}" name="${name}"><option value="">None / guest</option>${S.bands.slice().sort((x,y)=>x.name.localeCompare(y.name)).map(b=>`<option value="${b.id}"${b.id===sel?' selected':''}>${esc(b.name)}</option>`).join('')}</select></div>`;
+function videosView(){
+  if(!S.videos)return `<div class="bar"><h2 class="disp">Videos</h2></div>`+setupNote();
+  const own=S.bands.filter(b=>b.video_url);
+  return `<div class="bar"><h2 class="disp">Videos</h2><button class="btn red" data-act="new">+ Add a video</button></div>
+  <p class="note">Each band's own video is set on its band page and shows here too (${own.length} so far). Videos you add here show on the Videos page, and on the band's page if you pick a band.</p>
+  ${S.videos.length?S.videos.map(v=>`<div class="row"><div><div class="t">${esc(v.title)}${v.published?'':'<span class="tag bad">Hidden</span>'}</div><div class="s">${esc(v.bands?v.bands.name:'No band')} · ${esc(v.youtube_url)}</div></div><div class="a"><button class="btn sm" data-act="edit" data-id="${v.id}">Edit</button></div></div>`).join(''):'<p>No extra videos yet.</p>'}`;
+}
+function videoForm(){
+  const isNew=S.edit==='new',v=isNew?{published:true,sort_order:0}:S.videos.find(x=>x.id===S.edit);
+  if(!v){S.edit=null;return videosView()}
+  return `<form class="card" data-form="video" data-id="${isNew?'':v.id}"><h2 class="disp" style="margin-bottom:18px">${isNew?'Add a video':'Edit video'}</h2>
+  <div class="g2">${F('Title','title',v.title,{req:1})}${F('YouTube link','youtube_url',v.youtube_url,{type:'url',req:1,ph:'https://youtu.be/…'})}</div>
+  <div class="g2">${bandSelect(v.band_id,'band_id')}${F('Order','sort_order',v.sort_order,{type:'number',hint:'Lower numbers come first.'})}</div>
+  <label class="chk" style="margin-bottom:18px"><input type="checkbox" name="published" ${v.published?'checked':''}> Show on the site</label>
+  <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn red" type="submit">Save</button><button class="btn" type="button" data-act="cancel">Cancel</button>${!isNew?`<button class="btn" type="button" data-act="delVideo" data-id="${v.id}" style="margin-left:auto">Delete</button>`:''}</div></form>`;
+}
+async function saveVideo(form){
+  const id=form.dataset.id,d=new FormData(form);
+  const row={title:nul(d.get('title')),youtube_url:ytLink(d.get('youtube_url')),band_id:nul(d.get('band_id')),sort_order:parseInt(d.get('sort_order'),10)||0,published:d.has('published')};
+  if(!row.title)throw new Error('The video needs a title');
+  if(!row.youtube_url)throw new Error('Paste a YouTube link');
+  if(id)ck(await db.from('videos').update(row).eq('id',id));else ck(await db.from('videos').insert(row));
+}
+
+/* ----- socks on sessions (admin) ----- */
+function sessionsView(){
+  if(!S.sessions)return `<div class="bar"><h2 class="disp">Sessions</h2></div>`+setupNote();
+  return `<div class="bar"><h2 class="disp">Socks On Sessions</h2><button class="btn red" data-act="new">+ Add a session</button></div>
+  ${S.sessions.length?S.sessions.map(s=>`<div class="row"><div><div class="t">${esc(s.title)}${s.published?'':'<span class="tag bad">Hidden</span>'}</div><div class="s">${esc((s.bands&&s.bands.name)||s.band_text||'')}${s.session_date?' · '+esc(s.session_date):''}${s.video_url?' · video':''}${s.audio_url?' · audio':''}</div></div><div class="a"><button class="btn sm" data-act="edit" data-id="${s.id}">Edit</button></div></div>`).join(''):'<p>No sessions yet.</p>'}`;
+}
+function sessionForm(){
+  const isNew=S.edit==='new',s=isNew?{published:true}:S.sessions.find(x=>x.id===S.edit);
+  if(!s){S.edit=null;return sessionsView()}
+  return `<form class="card" data-form="session" data-id="${isNew?'':s.id}"><h2 class="disp" style="margin-bottom:18px">${isNew?'Add a session':'Edit session'}</h2>
+  <div class="g2">${F('Title','title',s.title,{req:1,ph:'Das Kapitans: Socks On Session'})}${F('Date','session_date',s.session_date,{type:'date'})}</div>
+  <div class="g2">${bandSelect(s.band_id,'band_id')}${F('Or a guest act (if not on the roster)','band_text',s.band_text)}</div>
+  ${F('About this session','summary',s.summary,{area:1,rows:5,hint:'A few lines: who played, what you talked about.'})}
+  ${F('YouTube link (video)','video_url',s.video_url,{type:'url',ph:'https://youtu.be/…'})}
+  ${F('Audio / podcast link','audio_url',s.audio_url,{type:'url',ph:'https://open.spotify.com/episode/…',hint:'Spotify, Apple Podcasts and SoundCloud links get a player on the page. Any other link shows as a Listen button.'})}
+  <label class="chk" style="margin-bottom:18px"><input type="checkbox" name="published" ${s.published?'checked':''}> Show on the site</label>
+  <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn red" type="submit">Save</button><button class="btn" type="button" data-act="cancel">Cancel</button>${!isNew?`<button class="btn" type="button" data-act="delSession" data-id="${s.id}" style="margin-left:auto">Delete</button>`:''}</div></form>`;
+}
+async function saveSession(form){
+  const id=form.dataset.id,d=new FormData(form);
+  const row={title:nul(d.get('title')),session_date:nul(d.get('session_date')),band_id:nul(d.get('band_id')),band_text:nul(d.get('band_text')),summary:nul(d.get('summary')),
+    video_url:ytLink(d.get('video_url')),audio_url:link(d.get('audio_url')),published:d.has('published')};
+  if(!row.title)throw new Error('The session needs a title');
+  if(!row.video_url&&!row.audio_url)throw new Error('Add a YouTube link, an audio link, or both');
+  if(id)ck(await db.from('sessions').update(row).eq('id',id));else ck(await db.from('sessions').insert(row));
+}
+
+/* ----- newsletter list (admin) ----- */
+function subsView(){
+  if(!S.subs)return `<div class="bar"><h2 class="disp">Newsletter</h2></div>`+setupNote();
+  const n=S.subs.length;
+  return `<div class="bar"><h2 class="disp">Newsletter</h2><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn sm" data-act="copySubs">Copy all emails</button><button class="btn sm" data-act="csvSubs">Download CSV</button></div></div>
+  <p class="note"><strong>${n} ${n===1?'person':'people'} signed up.</strong> To send a newsletter, copy the emails and paste them into the Bcc box of an email (so nobody sees anyone else's address), or import the CSV into Mailchimp, Buttondown or similar. Remove anyone who asks to unsubscribe.</p>
+  ${n?S.subs.map(s=>`<div class="row"><div><div class="t" style="text-transform:none;font-family:'Archivo',sans-serif;font-weight:700;font-size:17px">${esc(s.email)}</div><div class="s">${esc((s.created_at||'').slice(0,10))}</div></div><div class="a"><button class="btn sm" data-act="delSub" data-id="${s.id}" data-name="${esc(s.email)}">Remove</button></div></div>`).join(''):'<p>Nobody yet.</p>'}`;
+}
+
 /* ----- people (admin) ----- */
 function peopleView(){
   const bn=id=>(S.bands.find(b=>b.id===id)||{name:'?'}).name;
@@ -421,6 +496,11 @@ app.addEventListener('click',e=>{
     else if(a==='delGig'){if(confirm('Delete this gig?')){ck(await db.from('gigs').delete().eq('id',id));S.edit=null;await reload();toast('Gig deleted')}}
     else if(a==='delRelease'){if(confirm('Delete this release?')){ck(await db.from('releases').delete().eq('id',id));S.edit=null;await reload();toast('Release deleted')}}
     else if(a==='addMember'){const sel=t.parentElement.querySelector('select');if(!sel.value)return;ck(await db.from('band_members').upsert({band_id:sel.value,user_id:t.dataset.u}));await reload();toast('Linked')}
+    else if(a==='delVideo'){if(confirm('Delete this video?')){ck(await db.from('videos').delete().eq('id',id));S.edit=null;await reload();toast('Video deleted')}}
+    else if(a==='delSession'){if(confirm('Delete this session?')){ck(await db.from('sessions').delete().eq('id',id));S.edit=null;await reload();toast('Session deleted')}}
+    else if(a==='delSub'){if(confirm('Remove '+t.dataset.name+' from the list?')){ck(await db.from('subscribers').delete().eq('id',id));await reload();toast('Removed')}}
+    else if(a==='copySubs'){const txt=S.subs.map(s=>s.email).join(', ');try{await navigator.clipboard.writeText(txt);toast(S.subs.length+' emails copied')}catch(x){prompt('Copy these emails:',txt)}}
+    else if(a==='csvSubs'){const csv='email,signed_up\n'+S.subs.map(s=>'"'+String(s.email).replace(/"/g,'""')+'",'+(s.created_at||'').slice(0,10)).join('\n');const u=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));const l=document.createElement('a');l.href=u;l.download='socks-on-subscribers.csv';document.body.appendChild(l);l.click();l.remove();setTimeout(()=>URL.revokeObjectURL(u),1000)}
     else if(a==='setPw'){const pw=prompt('New password for '+t.dataset.name+' (at least 8 characters):');if(!pw)return;ck(await db.rpc('admin_set_password',{p_user:id,p_password:pw}));toast('Password changed for '+t.dataset.name)}
     else if(a==='delUser'){if(confirm('Remove the login for '+t.dataset.name+'? They will no longer be able to sign in. Their bands, gigs and releases stay.')){ck(await db.rpc('admin_delete_user',{p_user:id}));await reload();toast('Login removed')}}
     else if(a==='rmMember'){ck(await db.from('band_members').delete().eq('band_id',t.dataset.b).eq('user_id',t.dataset.u));await reload();toast('Removed')}
@@ -465,6 +545,8 @@ app.addEventListener('submit',e=>{
       else if(kind==='gig'){await saveGig(f);S.edit=null;await reload();toast('Gig saved')}
       else if(kind==='featured'){await saveFeatured(f);toast('Saved. The Releases page shows it straight away.')}
       else if(kind==='release'){await saveRelease(f);S.edit=null;await reload();toast('Release saved')}
+      else if(kind==='video'){await saveVideo(f);S.edit=null;await reload();toast('Video saved')}
+      else if(kind==='session'){await saveSession(f);S.edit=null;await reload();toast('Session saved')}
     }finally{if(btn&&document.body.contains(btn))btn.disabled=false}
   });
 });
