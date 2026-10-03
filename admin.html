@@ -110,13 +110,13 @@ function loginView(){
   $('#who').innerHTML='';
   app.innerHTML=`<div class="center card">
   <h2 class="disp" style="margin-bottom:10px">Sign in</h2>
-  <p style="margin-bottom:20px">For label admins and bands. We'll email you a link, no password needed. You need to have been invited first.</p>
-  <form data-form="magic"><div class="f"><label for="em">Your email</label><input id="em" name="email" type="email" required autocomplete="email"></div>
-  <button class="btn red" type="submit">Email me a sign-in link</button></form>
-  <details style="margin-top:22px"><summary class="lab" style="cursor:pointer;min-height:36px">Use a password instead</summary>
-  <form data-form="pw" style="margin-top:12px"><div class="f"><label for="em2">Email</label><input id="em2" name="email" type="email" required autocomplete="email"></div>
+  <p style="margin-bottom:20px">For label admins and bands. Use the email and password you were given.</p>
+  <form data-form="pw"><div class="f"><label for="em2">Email</label><input id="em2" name="email" type="email" required autocomplete="email"></div>
   <div class="f"><label for="pw">Password</label><input id="pw" name="password" type="password" required autocomplete="current-password"></div>
-  <button class="btn" type="submit">Sign in</button></form></details></div>`;
+  <button class="btn red" type="submit">Sign in</button></form>
+  <details style="margin-top:22px"><summary class="lab" style="cursor:pointer;min-height:36px">Forgot it? Email me a sign-in link instead</summary>
+  <form data-form="magic" style="margin-top:12px"><div class="f"><label for="em">Your email</label><input id="em" name="email" type="email" required autocomplete="email"></div>
+  <button class="btn" type="submit">Email me a sign-in link</button></form></details></div>`;
 }
 
 function render(){
@@ -124,8 +124,8 @@ function render(){
   $('#who').innerHTML=`<span class="mono">${esc(S.user.email)}${S.admin?'<span class="tag">Admin</span>':''}</span><button class="btn sm ghost" data-act="signout">Sign out</button>`;
   if(!S.ready){app.innerHTML='<p class="mono">Loading…</p>';return}
   if(!S.profile){app.innerHTML=`<div class="card"><h2 class="disp" style="margin-bottom:10px">Something's off</h2><p>You're signed in, but there's no profile for you yet. Ask Roy to check your invite.</p></div>`;return}
-  if(!S.admin&&!S.mine.length){app.innerHTML=`<div class="card"><h2 class="disp" style="margin-bottom:10px">You're in</h2><p>You're signed in, but you're not linked to a band yet. Ask Roy to link your login to your band and you'll be able to edit it here.</p></div>${account()}`;return}
-  const tabs=S.admin?[['bands','Bands'],['gigs','Gigs'],['releases','Releases'],['featured','Featured'],['people','People']]:[['bands','My band'],['gigs','Gigs']];
+  if(!S.admin&&!S.mine.length){app.innerHTML=`<div class="card"><h2 class="disp" style="margin-bottom:10px">You're in</h2><p>You're signed in, but you're not linked to a band yet. Ask Roy to link your login to your band and you'll be able to edit it here.</p></div>${accountView()}`;return}
+  const tabs=S.admin?[['bands','Bands'],['gigs','Gigs'],['releases','Releases'],['featured','Featured'],['people','People'],['account','Account']]:[['bands',S.mine.length>1?'My bands':'My band'],['gigs','Gigs'],['releases','Releases'],['account','Account']];
   if(!tabs.some(t=>t[0]===S.tab))S.tab='bands';
   const tb=`<div class="tabs" role="tablist">${tabs.map(t=>`<button role="tab" class="${S.tab===t[0]?'on':''}" data-act="tab" data-tab="${t[0]}">${t[1]}</button>`).join('')}</div>`;
   let body='';
@@ -134,10 +134,23 @@ function render(){
   else if(S.tab==='releases')body=S.edit?releaseForm():releaseList();
   else if(S.tab==='featured')body=featuredView();
   else if(S.tab==='people')body=peopleView();
-  app.innerHTML=tb+body+(S.edit?'':account());
+  else if(S.tab==='account')body=accountView();
+  app.innerHTML=tb+body;
   window.scrollTo(0,0);
 }
-function account(){return `<form class="card" data-form="setpw" style="margin-top:40px"><h3 class="disp" style="font-size:24px;margin-bottom:8px">Your password (optional)</h3><p style="margin-bottom:12px;color:var(--mute)">Set one if you'd rather not wait for an email link each time.</p><div class="f" style="max-width:340px"><label for="npw">New password</label><input id="npw" name="password" type="password" minlength="8" required autocomplete="new-password"></div><button class="btn sm" type="submit">Save password</button></form>`}
+function accountView(){
+  const p=S.profile||{};
+  return `<div class="bar"><h2 class="disp">Account</h2><button class="btn sm ghost" data-act="signout">Sign out</button></div>
+  <form class="card" data-form="profile" style="margin-bottom:24px"><h3 class="disp" style="font-size:24px;margin-bottom:12px">Your details</h3>
+  <div class="f"><label>Email (you sign in with this)</label><input value="${esc(S.user.email)}" disabled></div>
+  ${F('Your name','display_name',p.display_name,{ph:'Shown to the label admins'})}
+  <button class="btn sm" type="submit">Save name</button></form>
+  <form class="card" data-form="setpw"><h3 class="disp" style="font-size:24px;margin-bottom:8px">Change your password</h3>
+  <p style="margin-bottom:12px;color:var(--mute)">At least 8 characters. You'll stay signed in on this device.</p>
+  <div class="g2" style="max-width:700px"><div class="f"><label for="npw">New password</label><input id="npw" name="password" type="password" minlength="8" required autocomplete="new-password"></div>
+  <div class="f"><label for="npw2">Type it again</label><input id="npw2" name="password2" type="password" minlength="8" required autocomplete="new-password"></div></div>
+  <button class="btn sm red" type="submit">Save password</button></form>`;
+}
 
 const F=(label,name,val,o={})=>`<div class="f"><label for="${name}">${label}</label>${o.area?`<textarea id="${name}" name="${name}" rows="${o.rows||5}">${esc(val)}</textarea>`:`<input id="${name}" name="${name}" type="${o.type||'text'}" value="${esc(val)}"${o.req?' required':''}${o.ph?` placeholder="${esc(o.ph)}"`:''}>`}${o.hint?`<small>${o.hint}</small>`:''}</div>`;
 const myBands=()=>S.admin?S.bands:S.bands.filter(b=>S.mine.includes(b.id));
@@ -263,17 +276,22 @@ async function saveGig(form){
 }
 
 /* ----- releases (admin) ----- */
+const visReleases=()=>S.admin?S.releases:S.releases.filter(r=>r.created_by===S.user.id||(r.release_bands||[]).some(x=>S.mine.includes(x.band_id)));
 function releaseList(){
+  const RL=visReleases();
   return `<div class="bar"><h2 class="disp">Releases</h2><button class="btn red" data-act="new">+ Add a release</button></div>
-  ${S.releases.length?S.releases.map(r=>`<div class="row"><div><div class="t">${esc(r.title)}</div><div class="s">${esc(r.artist_text||'')}${r.released_text?' · '+esc(r.released_text):''}</div></div><div class="a"><button class="btn sm" data-act="edit" data-id="${r.id}">Edit</button></div></div>`).join(''):'<p>No releases yet.</p>'}`;
+  ${S.admin?'':'<p class="note">You see releases your band is on. Add yours and it appears on the Releases page and your band page.</p>'}
+  ${RL.length?RL.map(r=>`<div class="row"><div><div class="t">${esc(r.title)}</div><div class="s">${esc(r.artist_text||'')}${r.released_text?' · '+esc(r.released_text):''}</div></div><div class="a"><button class="btn sm" data-act="edit" data-id="${r.id}">Edit</button></div></div>`).join(''):'<p>No releases yet.</p>'}`;
 }
 const hasRelCols=()=>S.releases.length>0&&('embed_url' in S.releases[0]);
+// (the embed/description boxes only show once 03-featured-and-crawl.sql has been run)
 function releaseForm(){
   const isNew=S.edit==='new';
   const r=isNew?{release_bands:[]}:S.releases.find(x=>x.id===S.edit);
   if(!r){S.edit=null;return releaseList()}
   const on=new Set((r.release_bands||[]).map(x=>x.band_id));
-  const bl=S.bands.slice().sort((a,b)=>a.name.localeCompare(b.name));
+  const bl=myBands().slice().sort((a,b)=>a.name.localeCompare(b.name));
+  if(isNew&&!S.admin&&bl.length===1)on.add(bl[0].id);
   return `<form class="card" data-form="release" data-id="${isNew?'':r.id}">
   <h2 class="disp" style="margin-bottom:18px">${isNew?'Add a release':'Edit '+esc(r.title)}</h2>
   <div class="g2">${F('Title','title',r.title,{req:1})}${F('Artist as shown','artist_text',r.artist_text,{ph:'Das Kapitans, or Various artists'})}
@@ -281,7 +299,7 @@ function releaseForm(){
   ${F('Release date (for ordering)','released_date',r.released_date,{type:'date'})}${F('Label','label',r.label,{ph:'Socks On Records'})}
   ${F('Bandcamp link','bandcamp_url',r.bandcamp_url,{type:'url',ph:'https://…'})}${F('Cover image link','cover_url',r.cover_url,{type:'url',ph:'https://…'})}</div>
   ${hasRelCols()?`${F('Bandcamp player (optional)','embed_url',r.embed_url,{area:1,rows:2,hint:'Paste the Bandcamp embed code. Shows a player on the band page.'})}${F('About this release (optional)','description',r.description,{area:1,rows:4})}`:''}
-  <div class="f"><span class="lab">Which roster bands are on it?</span><div class="checks">${bl.map(b=>`<label class="chk"><input type="checkbox" name="rb" value="${b.id}"${on.has(b.id)?' checked':''}> ${esc(b.name)}</label>`).join('')}</div></div>
+  <div class="f"><span class="lab">${S.admin?'Which roster bands are on it?':'Which of your bands is this for?'}</span><div class="checks">${bl.map(b=>`<label class="chk"><input type="checkbox" name="rb" value="${b.id}"${on.has(b.id)?' checked':''}> ${esc(b.name)}</label>`).join('')}</div></div>
   <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn red" type="submit">Save release</button><button class="btn" type="button" data-act="cancel">Cancel</button>${!isNew?`<button class="btn" type="button" data-act="delRelease" data-id="${r.id}" style="margin-left:auto">Delete release</button>`:''}</div>
   </form>`;
 }
@@ -290,12 +308,16 @@ async function saveRelease(form){
   const row={title:nul(d.get('title')),artist_text:nul(d.get('artist_text')),type:nul(d.get('type')),released_text:nul(d.get('released_text')),
     released_date:nul(d.get('released_date')),label:nul(d.get('label')),bandcamp_url:link(d.get('bandcamp_url')),cover_url:link(d.get('cover_url'))};
   if(!row.title)throw new Error('A release needs a title');
+  const allowed=myBands().map(b=>b.id),picked=d.getAll('rb').filter(b=>allowed.includes(b));
+  if(!S.admin&&!picked.length)throw new Error('Tick which of your bands this release is for');
+  if(!row.artist_text&&picked.length)row.artist_text=picked.map(b=>(S.bands.find(x=>x.id===b)||{}).name).filter(Boolean).join(' & ');
   if(form.embed_url){row.embed_url=bcEmbed(form.embed_url.value);row.description=nul(form.description.value)}
   let rid=id;
   if(!id)rid=ck(await db.from('releases').insert(row).select('id').single()).id;
   else ck(await db.from('releases').update(row).eq('id',id));
-  ck(await db.from('release_bands').delete().eq('release_id',rid));
-  const links=d.getAll('rb').map(b=>({release_id:rid,band_id:b}));
+  if(S.admin)ck(await db.from('release_bands').delete().eq('release_id',rid));
+  else if(S.mine.length)ck(await db.from('release_bands').delete().eq('release_id',rid).in('band_id',S.mine));
+  const links=picked.map(b=>({release_id:rid,band_id:b}));
   if(links.length)ck(await db.from('release_bands').insert(links));
 }
 
@@ -345,15 +367,43 @@ async function saveFeatured(form){
 function peopleView(){
   const bn=id=>(S.bands.find(b=>b.id===id)||{name:'?'}).name;
   const opts=S.bands.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('');
+  const out=S.addResult?`<div class="note" style="margin-top:16px"><strong>${esc(S.addResult.head)}</strong><ul style="margin:8px 0 0 18px">${S.addResult.lines.map(l=>`<li>${esc(l)}</li>`).join('')}</ul></div>`:'';
   return `<div class="bar"><h2 class="disp">People</h2></div>
-  <div class="note"><strong>To add someone:</strong> in Supabase go to Authentication, Users, Invite user, and enter their email. They appear here straight away. Then link them to their band below. Anyone not invited can't sign in.</div>
+  <form class="card" data-form="addpeople" style="margin-bottom:28px"><h3 class="disp" style="font-size:24px;margin-bottom:8px">Add people</h3>
+  <p style="margin-bottom:12px">One person per line: <code>email, name, band</code>. For more than one band just keep adding them, e.g. <code>sam@example.com, Sam, Mices, Sprainer</code>. Everyone gets the shared password below, and they can change it themselves in the Account tab.</p>
+  <div class="f"><label for="ap-lines">People</label><textarea id="ap-lines" name="lines" rows="6" placeholder="sam@example.com, Sam Smith, Mices&#10;jo@example.com, Jo Bloggs, Das Kapitans"></textarea></div>
+  <div class="f" style="max-width:340px"><label for="ap-pw">Shared password</label><input id="ap-pw" name="password" type="text" minlength="8" required autocomplete="off" placeholder="At least 8 characters"></div>
+  <button class="btn red" type="submit">Create logins</button>${out}</form>
   ${S.people.map(p=>{
-    const ms=S.members.filter(m=>m.user_id===p.id);
-    return `<div class="row" style="align-items:flex-start"><div style="min-width:240px;flex:1"><div class="t" style="text-transform:none;font-family:'Archivo',sans-serif;font-weight:700;font-size:18px">${esc(p.email||p.id)}${p.id===S.user.id?'<span class="tag">You</span>':''}</div>
-    <label class="chk"><input type="checkbox" data-act="toggleAdmin" data-id="${p.id}" ${p.is_admin?'checked':''} ${p.id===S.user.id?'disabled':''}> Admin (can edit everything)</label></div>
+    const ms=S.members.filter(m=>m.user_id===p.id),me=p.id===S.user.id;
+    return `<div class="row" style="align-items:flex-start"><div style="min-width:240px;flex:1"><div class="t" style="text-transform:none;font-family:'Archivo',sans-serif;font-weight:700;font-size:18px">${esc(p.display_name||p.email||p.id)}${me?'<span class="tag">You</span>':''}</div>
+    ${p.display_name?`<div class="s">${esc(p.email||'')}</div>`:''}
+    <label class="chk"><input type="checkbox" data-act="toggleAdmin" data-id="${p.id}" ${p.is_admin?'checked':''} ${me?'disabled':''}> Admin (can edit everything)</label>
+    ${me?'':`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn sm" data-act="setPw" data-id="${p.id}" data-name="${esc(p.email||'')}">Set password</button><button class="btn sm" data-act="delUser" data-id="${p.id}" data-name="${esc(p.email||'')}">Remove login</button></div>`}</div>
     <div style="flex:2;min-width:260px"><div class="lab" style="margin-bottom:6px">Can edit these bands</div>
     ${ms.length?ms.map(m=>`<span class="chip">${esc(bn(m.band_id))}<button title="Remove" aria-label="Remove ${esc(bn(m.band_id))}" data-act="rmMember" data-u="${p.id}" data-b="${m.band_id}">×</button></span>`).join(''):'<div class="s" style="margin-bottom:6px">None</div>'}
     <div style="display:flex;gap:8px;margin-top:6px"><select aria-label="Band to add">${opts}</select><button class="btn sm" data-act="addMember" data-u="${p.id}">Add</button></div></div></div>`}).join('')}`;
+}
+
+const norm=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'');
+async function addPeople(form){
+  const pw=form.password.value;
+  if(pw.length<8)throw new Error('The password needs at least 8 characters');
+  const rows=form.lines.value.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  if(!rows.length)throw new Error('Add at least one line: email, name, band');
+  const done=[],bad=[];
+  for(const line of rows){
+    const parts=line.split(/[,\t]/).map(s=>s.trim());
+    const email=parts[0],name=parts[1]||'',names=parts.slice(2).filter(Boolean);
+    const ids=[],miss=[];
+    names.forEach(n=>{const b=S.bands.find(x=>norm(x.name)===norm(n)||norm(x.slug)===norm(n));b?ids.push(b.id):miss.push(n)});
+    if(miss.length){bad.push(email+': no band called "'+miss.join('", "')+'", so nothing was created for this line');continue}
+    const r=await db.rpc('admin_create_user',{p_email:email,p_name:name,p_password:pw,p_band_ids:ids});
+    if(r.error)bad.push(email+': '+r.error.message);else done.push(email+(names.length?' → '+names.join(', '):' (no band yet)'));
+  }
+  S.addResult={head:done.length+' created'+(bad.length?', '+bad.length+' not created':'')+'.',lines:done.map(x=>'Created '+x).concat(bad)};
+  if(!bad.length)form.lines.value='';
+  await reload();
 }
 
 /* ---------- events ---------- */
@@ -361,7 +411,7 @@ app.addEventListener('click',e=>{
   const t=e.target.closest('[data-act]');if(!t||t.tagName==='INPUT')return;
   const a=t.dataset.act,id=t.dataset.id;
   run(async()=>{
-    if(a==='tab'){S.tab=t.dataset.tab;S.edit=null;render()}
+    if(a==='tab'){S.tab=t.dataset.tab;S.edit=null;S.addResult=null;render()}
     else if(a==='new'){S.edit='new';render()}
     else if(a==='edit'){S.edit=id;render()}
     else if(a==='cancel'){S.edit=null;render()}
@@ -371,6 +421,8 @@ app.addEventListener('click',e=>{
     else if(a==='delGig'){if(confirm('Delete this gig?')){ck(await db.from('gigs').delete().eq('id',id));S.edit=null;await reload();toast('Gig deleted')}}
     else if(a==='delRelease'){if(confirm('Delete this release?')){ck(await db.from('releases').delete().eq('id',id));S.edit=null;await reload();toast('Release deleted')}}
     else if(a==='addMember'){const sel=t.parentElement.querySelector('select');if(!sel.value)return;ck(await db.from('band_members').upsert({band_id:sel.value,user_id:t.dataset.u}));await reload();toast('Linked')}
+    else if(a==='setPw'){const pw=prompt('New password for '+t.dataset.name+' (at least 8 characters):');if(!pw)return;ck(await db.rpc('admin_set_password',{p_user:id,p_password:pw}));toast('Password changed for '+t.dataset.name)}
+    else if(a==='delUser'){if(confirm('Remove the login for '+t.dataset.name+'? They will no longer be able to sign in. Their bands, gigs and releases stay.')){ck(await db.rpc('admin_delete_user',{p_user:id}));await reload();toast('Login removed')}}
     else if(a==='rmMember'){ck(await db.from('band_members').delete().eq('band_id',t.dataset.b).eq('user_id',t.dataset.u));await reload();toast('Removed')}
   });
 });
@@ -402,8 +454,13 @@ app.addEventListener('submit',e=>{
         const r=await db.auth.signInWithPassword({email:f.email.value.trim(),password:f.password.value});
         if(r.error)throw r.error;
       }else if(kind==='setpw'){
+        if(f.password.value!==f.password2.value)throw new Error("The two passwords don't match");
         const r=await db.auth.updateUser({password:f.password.value});
         if(r.error)throw r.error;f.reset();toast('Password saved');
+      }else if(kind==='profile'){
+        ck(await db.from('profiles').update({display_name:nul(f.display_name.value)}).eq('id',S.user.id));
+        S.profile.display_name=nul(f.display_name.value);toast('Saved');
+      }else if(kind==='addpeople'){await addPeople(f)
       }else if(kind==='band'){await saveBand(f);S.edit=null;await reload();toast('Saved. The site shows it straight away.')}
       else if(kind==='gig'){await saveGig(f);S.edit=null;await reload();toast('Gig saved')}
       else if(kind==='featured'){await saveFeatured(f);toast('Saved. The Releases page shows it straight away.')}
