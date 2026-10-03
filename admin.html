@@ -80,7 +80,7 @@ const today=()=>{const n=new Date();return n.getFullYear()+'-'+String(n.getMonth
 const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const fmt=s=>{if(!s)return '';const p=s.split('-').map(Number);return p[2]+' '+MON[p[1]-1]+' '+p[0]};
 
-let S={user:null,profile:null,admin:false,mine:[],bands:[],gigs:[],releases:[],people:[],members:[],notes:[],settings:null,tab:'bands',edit:null,ready:false};
+let S={user:null,profile:null,admin:false,mine:[],bands:[],gigs:[],releases:[],people:[],users:null,members:[],notes:[],settings:null,tab:'bands',edit:null,ready:false};
 
 let tt;
 function toast(m,bad){const t=$('#toast');t.textContent=m;t.className=bad?'bad':'';t.style.display='block';clearTimeout(tt);tt=setTimeout(()=>t.style.display='none',bad?7000:2800)}
@@ -97,6 +97,7 @@ async function load(){
   if(S.admin){
     S.people=ck(await db.from('profiles').select('*').order('email'));
     S.members=ck(await db.from('band_members').select('*'));
+    {const ul=await db.rpc('admin_list_users');S.users=ul.error?null:ul.data}
     S.notes=ck(await db.from('band_notes').select('*'));
     const tryLoad=async q=>{const r=await q;return r.error?null:r.data};
     S.videos=await tryLoad(db.from('videos').select('*,bands(name)').order('sort_order').order('created_at',{ascending:false}));
@@ -129,7 +130,7 @@ function render(){
   if(!S.ready){app.innerHTML='<p class="mono">Loading…</p>';return}
   if(!S.profile){app.innerHTML=`<div class="card"><h2 class="disp" style="margin-bottom:10px">Something's off</h2><p>You're signed in, but there's no profile for you yet. Ask Roy to check your invite.</p></div>`;return}
   if(!S.admin&&!S.mine.length){app.innerHTML=`<div class="card"><h2 class="disp" style="margin-bottom:10px">You're in</h2><p>You're signed in, but you're not linked to a band yet. Ask Roy to link your login to your band and you'll be able to edit it here.</p></div>${accountView()}`;return}
-  const tabs=S.admin?[['bands','Bands'],['gigs','Gigs'],['releases','Releases'],['featured','Featured'],['videos','Videos'],['sessions','Sessions'],['subs','Newsletter'],['people','People'],['account','Account']]:[['bands',S.mine.length>1?'My bands':'My band'],['gigs','Gigs'],['releases','Releases'],['account','Account']];
+  const tabs=S.admin?[['bands','Bands'],['gigs','Gigs'],['releases','Releases'],['featured','Featured'],['videos','Videos'],['sessions','Sessions'],['subs','Newsletter'],['people','Users'],['account','Account']]:[['bands',S.mine.length>1?'My bands':'My band'],['gigs','Gigs'],['releases','Releases'],['account','Account']];
   if(!tabs.some(t=>t[0]===S.tab))S.tab='bands';
   const tb=`<div class="tabs" role="tablist">${tabs.map(t=>`<button role="tab" class="${S.tab===t[0]?'on':''}" data-act="tab" data-tab="${t[0]}">${t[1]}</button>`).join('')}</div>`;
   let body='';
@@ -142,8 +143,9 @@ function render(){
   else if(S.tab==='subs')body=subsView();
   else if(S.tab==='people')body=peopleView();
   else if(S.tab==='account')body=accountView();
+  const vk=S.tab+'|'+(S.edit&&typeof S.edit==='object'?JSON.stringify(S.edit):String(S.edit)),y=window.scrollY,same=vk===S.vk;
   app.innerHTML=tb+body;
-  window.scrollTo(0,0);
+  S.vk=vk;window.scrollTo(0,same?y:0);
 }
 function accountView(){
   const p=S.profile||{};
@@ -438,26 +440,40 @@ function subsView(){
   ${n?S.subs.map(s=>`<div class="row"><div><div class="t" style="text-transform:none;font-family:'Archivo',sans-serif;font-weight:700;font-size:17px">${esc(s.email)}</div><div class="s">${esc((s.created_at||'').slice(0,10))}</div></div><div class="a"><button class="btn sm" data-act="delSub" data-id="${s.id}" data-name="${esc(s.email)}">Remove</button></div></div>`).join(''):'<p>Nobody yet.</p>'}`;
 }
 
-/* ----- people (admin) ----- */
+/* ----- users (admin) ----- */
+function ago(d){if(!d)return null;const s=(Date.now()-new Date(d).getTime())/1000;if(s<90)return 'just now';const m=Math.round(s/60);if(m<60)return m+' min ago';const h=Math.round(m/60);if(h<24)return h+(h===1?' hour ago':' hours ago');const dd=Math.round(h/24);if(dd<31)return dd+(dd===1?' day ago':' days ago');const mo=Math.round(dd/30);if(mo<12)return mo+(mo===1?' month ago':' months ago');return Math.round(dd/365)+' yr ago'}
+function fmtDT(d){try{return new Date(d).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}catch(e){return String(d)}}
 function peopleView(){
   const bn=id=>(S.bands.find(b=>b.id===id)||{name:'?'}).name;
   const opts=S.bands.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('');
   const out=S.addResult?`<div class="note" style="margin-top:16px"><strong>${esc(S.addResult.head)}</strong><ul style="margin:8px 0 0 18px">${S.addResult.lines.map(l=>`<li>${esc(l)}</li>`).join('')}</ul></div>`:'';
-  return `<div class="bar"><h2 class="disp">People</h2></div>
-  <form class="card" data-form="addpeople" style="margin-bottom:28px"><h3 class="disp" style="font-size:24px;margin-bottom:8px">Add people</h3>
+  const have=!!S.users;
+  const list=(have?S.users:S.people).slice().sort((a,b)=>String(a.display_name||a.email||'').toLowerCase().localeCompare(String(b.display_name||b.email||'').toLowerCase()));
+  const signed=have?list.filter(u=>u.last_sign_in_at).length:0;
+  const setup=have?'':`<div class="note" style="margin-bottom:20px"><strong>One more step for last login.</strong> Run <code>08-users-screen.sql</code> in the Supabase SQL Editor and this screen will show when each person last signed in. Everything else works without it.</div>`;
+  return `<div class="bar"><h2 class="disp">Users</h2></div>
+  ${setup}
+  <details class="card" style="margin-bottom:24px" ${S.addResult?'open':''}><summary class="disp" style="font-size:24px;cursor:pointer">Add people</summary>
+  <form data-form="addpeople" style="margin-top:12px">
   <p style="margin-bottom:12px">One person per line: <code>email, name, band</code>. For more than one band just keep adding them, e.g. <code>sam@example.com, Sam, Mices, Sprainer</code>. Everyone gets the shared password below, and they can change it themselves in the Account tab.</p>
   <div class="f"><label for="ap-lines">People</label><textarea id="ap-lines" name="lines" rows="6" placeholder="sam@example.com, Sam Smith, Mices&#10;jo@example.com, Jo Bloggs, Das Kapitans"></textarea></div>
   <div class="f" style="max-width:340px"><label for="ap-pw">Shared password</label><input id="ap-pw" name="password" type="text" minlength="8" required autocomplete="off" placeholder="At least 8 characters"></div>
-  <button class="btn red" type="submit">Create logins</button>${out}</form>
-  ${S.people.map(p=>{
+  <button class="btn red" type="submit">Create logins</button>${out}</form></details>
+  <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:14px"><div class="f" style="margin:0;flex:1;min-width:220px;max-width:380px"><label for="ufilter" class="lab">Find someone</label><input id="ufilter" type="search" placeholder="Name, email or band" autocomplete="off"></div>
+  <div class="mono" style="flex:1">${list.length} ${list.length===1?'user':'users'}${have?' · '+signed+' have signed in · '+(list.length-signed)+' not yet':''}</div></div>
+  ${list.map(p=>{
     const ms=S.members.filter(m=>m.user_id===p.id),me=p.id===S.user.id;
-    return `<div class="row" style="align-items:flex-start"><div style="min-width:240px;flex:1"><div class="t" style="text-transform:none;font-family:'Archivo',sans-serif;font-weight:700;font-size:18px">${esc(p.display_name||p.email||p.id)}${me?'<span class="tag">You</span>':''}</div>
+    const label=p.display_name||p.email||p.id;
+    const last=have?(p.last_sign_in_at?`<span title="${esc(fmtDT(p.last_sign_in_at))}">Last signed in <strong>${esc(ago(p.last_sign_in_at))}</strong></span>`:'<span class="tag bad" style="margin:0">Never signed in</span>'):'';
+    const search=(label+' '+(p.email||'')+' '+ms.map(m=>bn(m.band_id)).join(' ')).toLowerCase();
+    return `<div class="row urow" data-search="${esc(search)}" style="align-items:flex-start"><div style="min-width:240px;flex:1"><div class="t" style="text-transform:none;font-family:'Archivo',sans-serif;font-weight:700;font-size:18px">${esc(label)}${me?'<span class="tag">You</span>':''}${p.is_admin?'<span class="tag" style="background:var(--yellow,#f2d14a)">Admin</span>':''}</div>
     ${p.display_name?`<div class="s">${esc(p.email||'')}</div>`:''}
-    <label class="chk"><input type="checkbox" data-act="toggleAdmin" data-id="${p.id}" ${p.is_admin?'checked':''} ${me?'disabled':''}> Admin (can edit everything)</label>
-    ${me?'':`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn sm" data-act="setPw" data-id="${p.id}" data-name="${esc(p.email||'')}">Set password</button><button class="btn sm" data-act="delUser" data-id="${p.id}" data-name="${esc(p.email||'')}">Remove login</button></div>`}</div>
+    ${last?`<div class="s" style="margin-top:4px">${last}${p.created_at?' · added '+esc(fmtDT(p.created_at).split(',')[0]):''}</div>`:''}
+    ${me?'':`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn sm ${p.is_admin?'':'red'}" data-act="setAdmin" data-id="${p.id}" data-v="${p.is_admin?0:1}" data-name="${esc(label)}">${p.is_admin?'Remove admin':'Make admin'}</button><button class="btn sm" data-act="setPw" data-id="${p.id}" data-name="${esc(p.email||'')}">Set password</button><button class="btn sm" data-act="delUser" data-id="${p.id}" data-name="${esc(p.email||'')}">Remove login</button></div>`}</div>
     <div style="flex:2;min-width:260px"><div class="lab" style="margin-bottom:6px">Can edit these bands</div>
-    ${ms.length?ms.map(m=>`<span class="chip">${esc(bn(m.band_id))}<button title="Remove" aria-label="Remove ${esc(bn(m.band_id))}" data-act="rmMember" data-u="${p.id}" data-b="${m.band_id}">×</button></span>`).join(''):'<div class="s" style="margin-bottom:6px">None</div>'}
-    <div style="display:flex;gap:8px;margin-top:6px"><select aria-label="Band to add">${opts}</select><button class="btn sm" data-act="addMember" data-u="${p.id}">Add</button></div></div></div>`}).join('')}`;
+    ${ms.length?ms.map(m=>`<span class="chip">${esc(bn(m.band_id))}<button title="Remove" aria-label="Remove ${esc(bn(m.band_id))}" data-act="rmMember" data-u="${p.id}" data-b="${m.band_id}" data-name="${esc(label)}">×</button></span>`).join(''):'<div class="s" style="margin-bottom:6px">None</div>'}
+    <div style="display:flex;gap:8px;margin-top:6px"><select aria-label="Band to add">${opts}</select><button class="btn sm" data-act="addMember" data-u="${p.id}" data-name="${esc(label)}">Add</button></div></div></div>`}).join('')}
+  <p id="unone" class="mono" style="display:none;margin-top:16px">Nobody matches that.</p>`;
 }
 
 const norm=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'');
@@ -495,7 +511,10 @@ app.addEventListener('click',e=>{
     else if(a==='delBand'){if(confirm('Delete this band for good? Their gigs stay, but lose the link to the band.')){ck(await db.from('bands').delete().eq('id',id));S.edit=null;await reload();toast('Band deleted')}}
     else if(a==='delGig'){if(confirm('Delete this gig?')){ck(await db.from('gigs').delete().eq('id',id));S.edit=null;await reload();toast('Gig deleted')}}
     else if(a==='delRelease'){if(confirm('Delete this release?')){ck(await db.from('releases').delete().eq('id',id));S.edit=null;await reload();toast('Release deleted')}}
-    else if(a==='addMember'){const sel=t.parentElement.querySelector('select');if(!sel.value)return;ck(await db.from('band_members').upsert({band_id:sel.value,user_id:t.dataset.u}));await reload();toast('Linked')}
+    else if(a==='addMember'){const sel=t.parentElement.querySelector('select');if(!sel.value)return;const bname=sel.options[sel.selectedIndex].text;ck(await db.from('band_members').upsert({band_id:sel.value,user_id:t.dataset.u},{onConflict:'band_id,user_id',ignoreDuplicates:true}));await reload();toast(t.dataset.name+' can now edit '+bname)}
+    else if(a==='setAdmin'){const on=t.dataset.v==='1';if(!confirm(on?'Make '+t.dataset.name+' an admin? They will be able to edit everything, including other people\'s logins.':'Remove admin from '+t.dataset.name+'? They will keep access to their own bands.'))return;
+      if(S.users){ck(await db.rpc('admin_set_admin',{p_user:id,p_admin:on}))}else{ck(await db.from('profiles').update({is_admin:on}).eq('id',id))}
+      await reload();toast(t.dataset.name+(on?' is now an admin':' is no longer an admin'))}
     else if(a==='delVideo'){if(confirm('Delete this video?')){ck(await db.from('videos').delete().eq('id',id));S.edit=null;await reload();toast('Video deleted')}}
     else if(a==='delSession'){if(confirm('Delete this session?')){ck(await db.from('sessions').delete().eq('id',id));S.edit=null;await reload();toast('Session deleted')}}
     else if(a==='delSub'){if(confirm('Remove '+t.dataset.name+' from the list?')){ck(await db.from('subscribers').delete().eq('id',id));await reload();toast('Removed')}}
@@ -503,10 +522,11 @@ app.addEventListener('click',e=>{
     else if(a==='csvSubs'){const csv='email,signed_up\n'+S.subs.map(s=>'"'+String(s.email).replace(/"/g,'""')+'",'+(s.created_at||'').slice(0,10)).join('\n');const u=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));const l=document.createElement('a');l.href=u;l.download='socks-on-subscribers.csv';document.body.appendChild(l);l.click();l.remove();setTimeout(()=>URL.revokeObjectURL(u),1000)}
     else if(a==='setPw'){const pw=prompt('New password for '+t.dataset.name+' (at least 8 characters):');if(!pw)return;ck(await db.rpc('admin_set_password',{p_user:id,p_password:pw}));toast('Password changed for '+t.dataset.name)}
     else if(a==='delUser'){if(confirm('Remove the login for '+t.dataset.name+'? They will no longer be able to sign in. Their bands, gigs and releases stay.')){ck(await db.rpc('admin_delete_user',{p_user:id}));await reload();toast('Login removed')}}
-    else if(a==='rmMember'){ck(await db.from('band_members').delete().eq('band_id',t.dataset.b).eq('user_id',t.dataset.u));await reload();toast('Removed')}
+    else if(a==='rmMember'){ck(await db.from('band_members').delete().eq('band_id',t.dataset.b).eq('user_id',t.dataset.u));await reload();toast('Removed '+t.dataset.name+' from that band')}
   });
 });
-app.addEventListener('input',e=>{if(e.target.name==='embed_url'&&e.target.closest('[data-form=featured]'))setPreview(e.target.value)});
+app.addEventListener('input',e=>{
+  if(e.target.id==='ufilter'){const q=e.target.value.trim().toLowerCase();let n=0;document.querySelectorAll('.urow').forEach(r=>{const ok=!q||r.dataset.search.includes(q);r.style.display=ok?'':'none';if(ok)n++});const z=document.getElementById('unone');if(z)z.style.display=n?'none':'block'}if(e.target.name==='embed_url'&&e.target.closest('[data-form=featured]'))setPreview(e.target.value)});
 app.addEventListener('change',e=>{
   const t=e.target;
   if(t.dataset&&t.dataset.act==='pickRelease'){
@@ -515,9 +535,6 @@ app.addEventListener('change',e=>{
     f.blurb.value=r.description||f.blurb.value;f.link_url.value=r.bandcamp_url||'';f.cover_url.value=r.cover_url||'';
     f.embed_url.value=r.embed_url||'';setPreview(r.embed_url);
   }
-  if(t.dataset&&t.dataset.act==='toggleAdmin')run(async()=>{
-    ck(await db.from('profiles').update({is_admin:t.checked}).eq('id',t.dataset.id));await reload();toast(t.checked?'Now an admin':'No longer an admin');
-  });
 });
 app.addEventListener('submit',e=>{
   const f=e.target.closest('form[data-form]');if(!f)return;
