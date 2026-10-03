@@ -80,7 +80,7 @@ const today=()=>{const n=new Date();return n.getFullYear()+'-'+String(n.getMonth
 const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const fmt=s=>{if(!s)return '';const p=s.split('-').map(Number);return p[2]+' '+MON[p[1]-1]+' '+p[0]};
 
-let S={user:null,profile:null,admin:false,mine:[],bands:[],gigs:[],releases:[],people:[],users:null,members:[],notes:[],settings:null,tab:'bands',edit:null,ready:false};
+let S={user:null,profile:null,admin:false,mine:[],bands:[],gigs:[],releases:[],people:[],shop:null,users:null,members:[],notes:[],settings:null,tab:'bands',edit:null,ready:false};
 
 let tt;
 function toast(m,bad){const t=$('#toast');t.textContent=m;t.className=bad?'bad':'';t.style.display='block';clearTimeout(tt);tt=setTimeout(()=>t.style.display='none',bad?7000:2800)}
@@ -102,6 +102,7 @@ async function load(){
     const tryLoad=async q=>{const r=await q;return r.error?null:r.data};
     S.videos=await tryLoad(db.from('videos').select('*,bands(name)').order('sort_order').order('created_at',{ascending:false}));
     S.sessions=await tryLoad(db.from('sessions').select('*,bands(name)').order('session_date',{ascending:false,nullsFirst:false}));
+    S.shop=await tryLoad(db.from('shop_items').select('*').order('kind').order('sort_order').order('created_at'));
     S.subs=await tryLoad(db.from('subscribers').select('*').order('created_at',{ascending:false}));
     const st=await db.from('site_settings').select('*').eq('key','featured_release').maybeSingle();
     S.settings=st.error?null:(st.data||{value:{}});   // null = the 03 SQL hasn't been run yet
@@ -130,7 +131,7 @@ function render(){
   if(!S.ready){app.innerHTML='<p class="mono">Loading…</p>';return}
   if(!S.profile){app.innerHTML=`<div class="card"><h2 class="disp" style="margin-bottom:10px">Something's off</h2><p>You're signed in, but there's no profile for you yet. Ask Roy to check your invite.</p></div>`;return}
   if(!S.admin&&!S.mine.length){app.innerHTML=`<div class="card"><h2 class="disp" style="margin-bottom:10px">You're in</h2><p>You're signed in, but you're not linked to a band yet. Ask Roy to link your login to your band and you'll be able to edit it here.</p></div>${accountView()}`;return}
-  const tabs=S.admin?[['bands','Bands'],['gigs','Gigs'],['releases','Releases'],['featured','Featured'],['videos','Videos'],['sessions','Sessions'],['subs','Newsletter'],['people','Users'],['account','Account']]:[['bands',S.mine.length>1?'My bands':'My band'],['gigs','Gigs'],['releases','Releases'],['account','Account']];
+  const tabs=S.admin?[['bands','Bands'],['gigs','Gigs'],['releases','Releases'],['featured','Featured'],['videos','Videos'],['sessions','Sessions'],['shop','Shop'],['subs','Newsletter'],['people','Users'],['account','Account']]:[['bands',S.mine.length>1?'My bands':'My band'],['gigs','Gigs'],['releases','Releases'],['account','Account']];
   if(!tabs.some(t=>t[0]===S.tab))S.tab='bands';
   const tb=`<div class="tabs" role="tablist">${tabs.map(t=>`<button role="tab" class="${S.tab===t[0]?'on':''}" data-act="tab" data-tab="${t[0]}">${t[1]}</button>`).join('')}</div>`;
   let body='';
@@ -140,6 +141,7 @@ function render(){
   else if(S.tab==='featured')body=featuredView();
   else if(S.tab==='videos')body=S.edit?videoForm():videosView();
   else if(S.tab==='sessions')body=S.edit?sessionForm():sessionsView();
+  else if(S.tab==='shop')body=S.edit?shopForm():shopView();
   else if(S.tab==='subs')body=subsView();
   else if(S.tab==='people')body=peopleView();
   else if(S.tab==='account')body=accountView();
@@ -161,7 +163,7 @@ function accountView(){
   <button class="btn sm red" type="submit">Save password</button></form>`;
 }
 
-const F=(label,name,val,o={})=>`<div class="f"><label for="${name}">${label}</label>${o.area?`<textarea id="${name}" name="${name}" rows="${o.rows||5}">${esc(val)}</textarea>`:`<input id="${name}" name="${name}" type="${o.type||'text'}" value="${esc(val)}"${o.req?' required':''}${o.ph?` placeholder="${esc(o.ph)}"`:''}>`}${o.hint?`<small>${o.hint}</small>`:''}</div>`;
+const F=(label,name,val,o={})=>`<div class="f"><label for="${name}">${label}</label>${o.area?`<textarea id="${name}" name="${name}" rows="${o.rows||5}">${esc(val)}</textarea>`:`<input id="${name}" name="${name}" type="${o.type||'text'}" value="${esc(val)}"${o.req?' required':''}${o.step?` step="${o.step}"`:''}${o.ph?` placeholder="${esc(o.ph)}"`:''}>`}${o.hint?`<small>${o.hint}</small>`:''}</div>`;
 const myBands=()=>S.admin?S.bands:S.bands.filter(b=>S.mine.includes(b.id));
 
 /* ----- bands ----- */
@@ -440,6 +442,46 @@ function subsView(){
   ${n?S.subs.map(s=>`<div class="row"><div><div class="t" style="text-transform:none;font-family:'Archivo',sans-serif;font-weight:700;font-size:17px">${esc(s.email)}</div><div class="s">${esc((s.created_at||'').slice(0,10))}</div></div><div class="a"><button class="btn sm" data-act="delSub" data-id="${s.id}" data-name="${esc(s.email)}">Remove</button></div></div>`).join(''):'<p>Nobody yet.</p>'}`;
 }
 
+/* ----- shop (admin) ----- */
+const gbp=p=>'£'+((p||0)/100).toFixed(2);
+function shopView(){
+  if(!S.shop)return `<div class="bar"><h2 class="disp">Shop</h2></div><div class="note"><strong>One setup step first.</strong> Run <code>09-shop.sql</code> (in the supabase folder) in the Supabase SQL Editor, then reload this page.</div>`;
+  const grp=(kind,label)=>{
+    const items=S.shop.filter(i=>i.kind===kind);
+    return `<h3 class="disp" style="font-size:26px;margin:28px 0 8px">${label}</h3>`+(items.length?items.map(i=>`<div class="row"><div style="min-width:220px;flex:1"><div class="t">${esc(i.title)}${i.published?'':'<span class="tag bad">Hidden</span>'}${i.stock<=0?'<span class="tag bad">Sold out</span>':i.stock<=5?'<span class="tag" style="background:#f2d14a">Low</span>':''}</div><div class="s">${gbp(i.price_pence)} · ${i.buy_url?'has a buy link':'no buy link yet (shows "Coming soon")'}</div></div>
+    <div class="a" style="align-items:center"><span class="lab" style="margin-right:4px">Stock</span><button class="btn sm" data-act="stock" data-id="${i.id}" data-d="-1" aria-label="One less">−</button><strong style="min-width:34px;text-align:center;font-size:20px">${i.stock}</strong><button class="btn sm" data-act="stock" data-id="${i.id}" data-d="1" aria-label="One more">+</button><button class="btn sm" data-act="stock" data-id="${i.id}" data-d="10">+10</button><button class="btn sm" data-act="edit" data-id="${i.id}" style="margin-left:10px">Edit</button></div></div>`).join(''):'<p>Nothing here yet.</p>');
+  };
+  return `<div class="bar"><h2 class="disp">Shop</h2><button class="btn red" data-act="new">+ Add an item</button></div>
+  <p class="note">This is the Merch &amp; Tickets page on the site. Use − and + to keep the stock right: at 5 or fewer it shows "Only N left", at 0 it shows "Sold out". Paste a link in <strong>Buy link</strong> (your Dodge Designed This shop, Big Cartel, a ticket seller) and the Buy button goes live. Payments happen on that site, not here.</p>
+  ${grp('merch','Merch')}${grp('ticket','Tickets')}`;
+}
+function shopForm(){
+  const isNew=S.edit==='new',i=isNew?{kind:'merch',price_pence:1000,stock:0,published:true,sort_order:0}:S.shop.find(x=>x.id===S.edit);
+  if(!i){S.edit=null;return shopView()}
+  return `<form class="card" data-form="shop" data-id="${isNew?'':i.id}"><h2 class="disp" style="margin-bottom:18px">${isNew?'Add an item':'Edit item'}</h2>
+  <div class="g2"><div class="f"><label for="kind">Goes in</label><select id="kind" name="kind"><option value="merch"${i.kind==='merch'?' selected':''}>Merch</option><option value="ticket"${i.kind==='ticket'?' selected':''}>Tickets</option></select></div>${F('Name','title',i.title,{req:1})}</div>
+  ${F('Description','description',i.description,{area:1,rows:3})}
+  <div class="g2">${F('Price (£)','price',(i.price_pence/100).toFixed(2),{type:'number',step:'0.01',req:1,hint:'e.g. 10 or 12.50'})}${F('Stock','stock',i.stock,{type:'number',hint:'How many you have. 0 shows Sold out.'})}</div>
+  ${F('Buy link','buy_url',i.buy_url,{type:'url',ph:'https://…',hint:'Where the Buy button goes. Leave empty to show "Coming soon".'})}
+  <div class="f"><span class="lab">Picture</span>${i.image_url?`<img class="pre" style="width:auto;max-width:220px;height:auto" src="${esc(i.image_url)}" alt=""><label class="chk"><input type="checkbox" name="rmimg"> Remove this picture</label>`:''}<input type="file" name="image" accept="image/*"><small>Square works best. Without one the tile shows a simple drawing of a tee, CD, cap or ticket.</small></div>
+  <div class="g2">${F('Order','sort_order',i.sort_order,{type:'number',hint:'Lower numbers come first.'})}<div></div></div>
+  <label class="chk" style="margin-bottom:18px"><input type="checkbox" name="published" ${i.published?'checked':''}> Show on the site</label>
+  <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn red" type="submit">Save</button><button class="btn" type="button" data-act="cancel">Cancel</button>${!isNew?`<button class="btn" type="button" data-act="delShop" data-id="${i.id}" style="margin-left:auto">Delete</button>`:''}</div></form>`;
+}
+async function saveShop(form){
+  const id=form.dataset.id,d=new FormData(form);
+  const price=Math.round(parseFloat(d.get('price'))*100);
+  const row={kind:d.get('kind'),title:nul(d.get('title')),description:nul(d.get('description')),price_pence:price,stock:Math.max(0,parseInt(d.get('stock'),10)||0),buy_url:link(d.get('buy_url')),sort_order:parseInt(d.get('sort_order'),10)||0,published:d.has('published')};
+  if(!row.title)throw new Error('The item needs a name');
+  if(!(price>=0))throw new Error('Enter a price, like 10 or 12.50');
+  const f=form.image&&form.image.files[0];
+  if(f){const blob=await shrink(f,1000);const path=S.user.id+'/shop-'+Date.now()+'.jpg';
+    ck(await db.storage.from('gig-posters').upload(path,blob,{contentType:'image/jpeg'}));
+    row.image_url=db.storage.from('gig-posters').getPublicUrl(path).data.publicUrl}
+  else if(d.has('rmimg'))row.image_url=null;
+  if(id)ck(await db.from('shop_items').update(row).eq('id',id));else ck(await db.from('shop_items').insert(row));
+}
+
 /* ----- users (admin) ----- */
 function ago(d){if(!d)return null;const s=(Date.now()-new Date(d).getTime())/1000;if(s<90)return 'just now';const m=Math.round(s/60);if(m<60)return m+' min ago';const h=Math.round(m/60);if(h<24)return h+(h===1?' hour ago':' hours ago');const dd=Math.round(h/24);if(dd<31)return dd+(dd===1?' day ago':' days ago');const mo=Math.round(dd/30);if(mo<12)return mo+(mo===1?' month ago':' months ago');return Math.round(dd/365)+' yr ago'}
 function fmtDT(d){try{return new Date(d).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}catch(e){return String(d)}}
@@ -517,6 +559,8 @@ app.addEventListener('click',e=>{
       await reload();toast(t.dataset.name+(on?' is now an admin':' is no longer an admin'))}
     else if(a==='delVideo'){if(confirm('Delete this video?')){ck(await db.from('videos').delete().eq('id',id));S.edit=null;await reload();toast('Video deleted')}}
     else if(a==='delSession'){if(confirm('Delete this session?')){ck(await db.from('sessions').delete().eq('id',id));S.edit=null;await reload();toast('Session deleted')}}
+    else if(a==='delShop'){if(confirm('Delete this item?')){ck(await db.from('shop_items').delete().eq('id',id));S.edit=null;await reload();toast('Item deleted')}}
+    else if(a==='stock'){const it=S.shop.find(x=>x.id===id),n=Math.max(0,it.stock+parseInt(t.dataset.d,10));ck(await db.from('shop_items').update({stock:n}).eq('id',id));it.stock=n;render();toast(it.title+': '+n+' in stock')}
     else if(a==='delSub'){if(confirm('Remove '+t.dataset.name+' from the list?')){ck(await db.from('subscribers').delete().eq('id',id));await reload();toast('Removed')}}
     else if(a==='copySubs'){const txt=S.subs.map(s=>s.email).join(', ');try{await navigator.clipboard.writeText(txt);toast(S.subs.length+' emails copied')}catch(x){prompt('Copy these emails:',txt)}}
     else if(a==='csvSubs'){const csv='email,signed_up\n'+S.subs.map(s=>'"'+String(s.email).replace(/"/g,'""')+'",'+(s.created_at||'').slice(0,10)).join('\n');const u=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));const l=document.createElement('a');l.href=u;l.download='socks-on-subscribers.csv';document.body.appendChild(l);l.click();l.remove();setTimeout(()=>URL.revokeObjectURL(u),1000)}
@@ -562,6 +606,7 @@ app.addEventListener('submit',e=>{
       else if(kind==='gig'){await saveGig(f);S.edit=null;await reload();toast('Gig saved')}
       else if(kind==='featured'){await saveFeatured(f);toast('Saved. The Releases page shows it straight away.')}
       else if(kind==='release'){await saveRelease(f);S.edit=null;await reload();toast('Release saved')}
+      else if(kind==='shop'){await saveShop(f);S.edit=null;await reload();toast('Item saved')}
       else if(kind==='video'){await saveVideo(f);S.edit=null;await reload();toast('Video saved')}
       else if(kind==='session'){await saveSession(f);S.edit=null;await reload();toast('Session saved')}
     }finally{if(btn&&document.body.contains(btn))btn.disabled=false}
