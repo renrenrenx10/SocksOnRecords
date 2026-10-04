@@ -61,13 +61,13 @@ def fmt_date(s):
 def ld(obj): return '<script type="application/ld+json">' + json.dumps(obj, ensure_ascii=False).replace("</", "<\\/") + "</script>"
 
 NAV = [("roster", "Roster"), ("gigs", "Gigs"), ("releases", "Releases"), ("videos", "Videos"),
-       ("sessions", "Sessions"), ("merch", "Merch &amp; Tickets"), ("contact", "Contact")]
+       ("sessions", "Sessions"), ("https://socksonrecords.bigcartel.com/", "Merch"), ("contact", "Contact")]
 
 def page(path, title, desc, body, image=None, jsonld=None, og_type="website", spa=None, noindex=False):
     url = SITE + "/" + path
     full_title = title if title.endswith(NAME) else f"{title} | {NAME}"
     img = image or OG_DEFAULT
-    nav = "".join(f'<a href="/{k}/"{" aria-current=page" if path.startswith(k) else ""}>{v}</a>' for k, v in NAV)
+    nav = "".join((f'<a href="{k}" rel="noopener">{v}</a>' if k.startswith("http") else f'<a href="/{k}/"{" aria-current=page" if path.startswith(k) else ""}>{v}</a>') for k, v in NAV)
     app = SITE + "/" + (spa or "")
     out = f"""<!doctype html>
 <html lang="en-GB">
@@ -119,7 +119,10 @@ def links(b):
              ("Merch", b.get("merch_url") or (b["bandcamp_url"].rstrip("/") + "/merch" if b.get("bandcamp_url") else None))]
     return [(n, u) for n, u in items if u]
 
-def bimg(b): return b.get("image_url") or b.get("bandcamp_image_url")
+def bimg(b):
+    if b.get("image_url"): return b["image_url"]
+    if os.path.exists(os.path.join(ROOT, "img", b["slug"] + ".jpg")): return f'{SITE}/img/{b["slug"]}.jpg'
+    return b.get("bandcamp_image_url")
 
 # ---------------------------------------------------------------- pages
 def build(d):
@@ -230,17 +233,13 @@ def build(d):
     if not d["sessions"]: body += "<p>The first sessions are being edited. Check back soon.</p>"
     urls.append(page("sessions/", "Socks On Sessions: live band videos and interviews", "Socks On Sessions is part live video, part podcast: a band plays in the room, then gets interviewed. Watch or listen.", body, spa="#/sessions"))
 
-    # --- merch & tickets
-    shop = [i for i in d["shop"]]
-    def money(p): return "£" + (f"{p/100:.2f}" if p % 100 else str(p // 100))
-    def tiles(kind): return "".join(f'<article class="card"><h2>{e(i["title"])}</h2><p>{e(i.get("description") or "")}</p><p class="price">{money(i["price_pence"])}' + (" <span class=\"tag\">Sold out</span>" if i["stock"] <= 0 else "") + "</p>" + (f'<p><a class="btn sm" href="{e(i["buy_url"])}" rel="noopener">{"Get tickets" if kind == "ticket" else "Buy"}</a></p>' if i.get("buy_url") and i["stock"] > 0 else "") + "</article>" for i in shop if i["kind"] == kind)
-    body = '<h1>Merch &amp; Tickets</h1><h2>Merch</h2><div class="grid">' + (tiles("merch") or "<p>New merch on the way.</p>") + '</div><h2>Tickets</h2><div class="grid">' + (tiles("ticket") or "<p>See the <a href=\"/gigs/\">gigs page</a> for upcoming shows.</p>") + "</div><p>More in the <a href=\"https://socksonrecords.bigcartel.com/\">Socks On store on Big Cartel</a>.</p>"
-    prods = [{"@type": "Product", "name": i["title"], "description": i.get("description") or i["title"], "brand": {"@type": "Brand", "name": NAME},
-              **({"image": i["image_url"]} if i.get("image_url") else {}),
-              "offers": {"@type": "Offer", "url": i["buy_url"], "priceCurrency": "GBP", "price": f'{i["price_pence"]/100:.2f}', "availability": "https://schema.org/InStock" if i["stock"] > 0 else "https://schema.org/OutOfStock"}}
-             for i in shop if i["kind"] == "merch" and i.get("buy_url")]
-    urls.append(page("merch/", "Merch & Tickets", "Tees, CDs, caps and gig tickets from Socks On Records, the DIY punk label from Peterborough and King's Lynn.", body,
-                     jsonld={"@context": "https://schema.org", "@graph": prods} if prods else None, spa="#/shop"))
+    # --- merch: the menu points at Big Cartel for now, so /merch/ simply forwards there
+    d_ = os.path.join(ROOT, "merch"); os.makedirs(d_, exist_ok=True)
+    open(os.path.join(d_, "index.html"), "w", encoding="utf-8").write(
+        '<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><title>Merch | Socks On Records</title>'
+        '<meta name="robots" content="noindex"><link rel="canonical" href="https://socksonrecords.bigcartel.com/">'
+        '<meta http-equiv="refresh" content="0; url=https://socksonrecords.bigcartel.com/"></head>'
+        '<body><p><a href="https://socksonrecords.bigcartel.com/">Socks On Records merch on Big Cartel</a></p></body></html>')
 
     # --- contact
     urls.append(page("contact/", "Contact", "Get in touch with Socks On Records: gigs, releases, press and bands. Email socksonrecords@gmail.com or message us on Instagram.",

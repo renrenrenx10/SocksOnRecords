@@ -97,7 +97,7 @@ async function load(){
   if(S.admin){
     S.people=ck(await db.from('profiles').select('*').order('email'));
     S.members=ck(await db.from('band_members').select('*'));
-    {const ul=await db.rpc('admin_list_users');S.users=ul.error?null:ul.data}
+    {const ul=await db.rpc('admin_list_users');S.users=(!ul.error&&Array.isArray(ul.data))?ul.data:null}
     S.notes=ck(await db.from('band_notes').select('*'));
     const tryLoad=async q=>{const r=await q;return r.error?null:r.data};
     S.videos=await tryLoad(db.from('videos').select('*,bands(name)').order('sort_order').order('created_at',{ascending:false}));
@@ -284,8 +284,13 @@ async function saveGig(form){
   else ck(await db.from('gigs').update(row).eq('id',id));
   const byName=new Map(S.bands.map(b=>[b.name.toLowerCase(),b.id]));
   const acts=(d.get('lineup')||'').split('\n').map(s=>s.trim()).filter(Boolean).map((l,i)=>{const b=byName.get(l.toLowerCase());return b?{gig_id:gid,band_id:b,position:i}:{gig_id:gid,act_name:l,position:i}});
-  ck(await db.from('gig_acts').delete().eq('gig_id',gid));
-  if(acts.length)ck(await db.from('gig_acts').insert(acts));
+  const rp=await db.rpc('set_gig_acts',{p_gig:gid,p_acts:acts.map(x=>({band_id:x.band_id||'',act_name:x.act_name||'',position:x.position}))});
+  if(rp.error){
+    // 10-gigs-for-tagged-bands.sql not run yet: fall back to the older way
+    if(!/set_gig_acts|schema cache|Could not find/i.test(rp.error.message||''))throw rp.error;
+    ck(await db.from('gig_acts').delete().eq('gig_id',gid));
+    if(acts.length)ck(await db.from('gig_acts').insert(acts));
+  }
 }
 
 /* ----- releases (admin) ----- */
@@ -450,7 +455,7 @@ function shopView(){
     <div class="a" style="align-items:center"><span class="lab" style="margin-right:4px">Stock</span><button class="btn sm" data-act="stock" data-id="${i.id}" data-d="-1" aria-label="One less">−</button><strong style="min-width:34px;text-align:center;font-size:20px">${i.stock}</strong><button class="btn sm" data-act="stock" data-id="${i.id}" data-d="1" aria-label="One more">+</button><button class="btn sm" data-act="stock" data-id="${i.id}" data-d="10">+10</button><button class="btn sm" data-act="edit" data-id="${i.id}" style="margin-left:10px">Edit</button></div></div>`).join(''):'<p>Nothing here yet.</p>');
   };
   return `<div class="bar"><h2 class="disp">Shop</h2><button class="btn red" data-act="new">+ Add an item</button></div>
-  <p class="note">This is the Merch &amp; Tickets page on the site. Use − and + to keep the stock right: at 5 or fewer it shows "Only N left", at 0 it shows "Sold out". Paste a link in <strong>Buy link</strong> (your Dodge Designed This shop, Big Cartel, a ticket seller) and the Buy button goes live. Payments happen on that site, not here.</p>
+  <p class="note"><strong>Not on the public menu yet.</strong> The site's Merch link currently goes to Big Cartel. This page is built and ready (at <code>#/shop</code>) for when you decide. This is the Merch &amp; Tickets page. Use − and + to keep the stock right: at 5 or fewer it shows "Only N left", at 0 it shows "Sold out". Paste a link in <strong>Buy link</strong> (your Dodge Designed This shop, Big Cartel, a ticket seller) and the Buy button goes live. Payments happen on that site, not here.</p>
   ${grp('merch','Merch')}${grp('ticket','Tickets')}`;
 }
 function shopForm(){
