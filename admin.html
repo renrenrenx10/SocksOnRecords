@@ -119,10 +119,7 @@ function loginView(){
   <p style="margin-bottom:20px">For label admins and bands. Use the email and password you were given.</p>
   <form data-form="pw"><div class="f"><label for="em2">Email</label><input id="em2" name="email" type="email" required autocomplete="email"></div>
   <div class="f"><label for="pw">Password</label><input id="pw" name="password" type="password" required autocomplete="current-password"></div>
-  <button class="btn red" type="submit">Sign in</button></form>
-  <details style="margin-top:22px"><summary class="lab" style="cursor:pointer;min-height:36px">Forgot it? Email me a sign-in link instead</summary>
-  <form data-form="magic" style="margin-top:12px"><div class="f"><label for="em">Your email</label><input id="em" name="email" type="email" required autocomplete="email"></div>
-  <button class="btn" type="submit">Email me a sign-in link</button></form></details></div>`;
+  <button class="btn red" type="submit">Sign in</button></form></div>`;
 }
 
 function render(){
@@ -236,7 +233,8 @@ async function saveBand(form){
 
 /* ----- gigs ----- */
 const STATUS=[['on_sale','On sale'],['sold_out','Sold out'],['free','Free'],['cancelled','Cancelled']];
-const canGig=g=>S.admin||g.created_by===S.user.id;
+const tagged=g=>(g.gig_acts||[]).some(x=>x.band_id&&S.mine.includes(x.band_id));
+const canGig=g=>S.admin||g.created_by===S.user.id||tagged(g);
 const lineupText=g=>(g.gig_acts||[]).slice().sort((a,b)=>a.position-b.position).map(a=>a.bands?a.bands.name:a.act_name).join('\n');
 function gigRow(g){
   const st=g.status!=='on_sale'?`<span class="tag ${g.status==='cancelled'?'bad':''}">${esc((STATUS.find(s=>s[0]===g.status)||[0,g.status])[1])}</span>`:'';
@@ -244,10 +242,10 @@ function gigRow(g){
   <div class="a"><button class="btn sm" data-act="dupGig" data-id="${g.id}">Copy</button>${canGig(g)?`<button class="btn sm" data-act="edit" data-id="${g.id}">Edit</button>`:''}</div></div>`;
 }
 function gigList(){
-  const mineOnly=S.admin?S.gigs:S.gigs.filter(g=>g.created_by===S.user.id);
+  const mineOnly=S.admin?S.gigs:S.gigs.filter(canGig);
   const t=today(),up=mineOnly.filter(g=>g.event_date>=t).sort((a,b)=>a.event_date<b.event_date?-1:1),past=mineOnly.filter(g=>g.event_date<t);
   return `<div class="bar"><h2 class="disp">Gigs</h2><button class="btn red" data-act="new">+ Add a gig</button></div>
-  ${S.admin?'':'<p class="note">You see the gigs you added. Anyone can copy a gig as a starting point for a new one.</p>'}
+  ${S.admin?'':'<p class="note">You see the gigs you added and any gig your band is in the line-up of, and you can edit them. Anyone can copy a gig as a starting point for a new one.</p>'}
   <h3 class="disp" style="font-size:22px;margin:8px 0 10px">Coming up</h3>${up.length?up.map(gigRow).join(''):'<p style="margin-bottom:20px">Nothing coming up. Add one!</p>'}
   <h3 class="disp" style="font-size:22px;margin:30px 0 10px">Past</h3>${past.length?past.map(gigRow).join(''):'<p>None yet.</p>'}`;
 }
@@ -540,7 +538,7 @@ async function addPeople(form){
 }
 
 /* ---------- events ---------- */
-app.addEventListener('click',e=>{
+document.addEventListener('click',e=>{
   const t=e.target.closest('[data-act]');if(!t||t.tagName==='INPUT')return;
   const a=t.dataset.act,id=t.dataset.id;
   run(async()=>{
@@ -549,7 +547,7 @@ app.addEventListener('click',e=>{
     else if(a==='edit'){S.edit=id;render()}
     else if(a==='cancel'){S.edit=null;render()}
     else if(a==='dupGig'){S.edit={copy:id};render()}
-    else if(a==='signout'){await db.auth.signOut()}
+    else if(a==='signout'){try{await db.auth.signOut()}finally{S.user=null;S.profile=null;S.ready=false;S.edit=null;S.admin=false;lastKey='';render()}}
     else if(a==='delBand'){if(confirm('Delete this band for good? Their gigs stay, but lose the link to the band.')){ck(await db.from('bands').delete().eq('id',id));S.edit=null;await reload();toast('Band deleted')}}
     else if(a==='delGig'){if(confirm('Delete this gig?')){ck(await db.from('gigs').delete().eq('id',id));S.edit=null;await reload();toast('Gig deleted')}}
     else if(a==='delRelease'){if(confirm('Delete this release?')){ck(await db.from('releases').delete().eq('id',id));S.edit=null;await reload();toast('Release deleted')}}
@@ -587,11 +585,7 @@ app.addEventListener('submit',e=>{
   if(btn)btn.disabled=true;
   run(async()=>{
     try{
-      if(kind==='magic'){
-        const r=await db.auth.signInWithOtp({email:f.email.value.trim(),options:{shouldCreateUser:false,emailRedirectTo:location.origin+location.pathname}});
-        if(r.error)throw r.error;
-        f.innerHTML='<p><strong>Check your email.</strong> Click the link in it and you\'ll be signed in. It can take a minute to arrive, check spam too.</p>';
-      }else if(kind==='pw'){
+      if(kind==='pw'){
         const r=await db.auth.signInWithPassword({email:f.email.value.trim(),password:f.password.value});
         if(r.error)throw r.error;
       }else if(kind==='setpw'){
@@ -614,7 +608,7 @@ app.addEventListener('submit',e=>{
 });
 
 /* ---------- start ---------- */
-(function(){const m=location.hash.match(/error_description=([^&]+)/);if(m)setTimeout(()=>toast(decodeURIComponent(m[1].replace(/\+/g,' '))+'. Ask for a new link or use a password.',true),300)})();
+(function(){const m=location.hash.match(/error_description=([^&]+)/);if(m)setTimeout(()=>toast(decodeURIComponent(m[1].replace(/\+/g,' '))+'. Please sign in with your email and password.',true),300)})();
 let started=false,lastKey='';
 db.auth.onAuthStateChange((ev,session)=>{
   // don't call the API inside this callback, defer it
