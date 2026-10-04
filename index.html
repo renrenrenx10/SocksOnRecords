@@ -361,10 +361,18 @@ function featured(){
 let RELFILTER='';
 const LABELKEY='__label';
 function relMatch(r,f){if(!f)return true;if(f===LABELKEY)return /^socks on records/i.test(r.artist||'');return r.slugs.includes(f)}
+function artistLink(r){
+  const t=r.artist||'';if(!t)return '';
+  const ls=(r.slugs||[]).map(sl=>BANDS.find(b=>b.slug===sl)).filter(Boolean);
+  if(ls.length===1)return `<a href="#/band/${esc(ls[0].slug)}" style="color:inherit;text-decoration:underline">${esc(t)}</a>`;
+  let out=esc(t),any=false;
+  ls.forEach(b=>{const n=esc(b.name);if(n&&out.indexOf(n)>-1&&out.indexOf('<a ')<0||(n&&out.indexOf(n)>-1)){const i=out.indexOf(n);const before=out.slice(0,i);if(before.lastIndexOf('<a ')>before.lastIndexOf('</a>'))return;out=before+`<a href="#/band/${esc(b.slug)}" style="color:inherit;text-decoration:underline">${n}</a>`+out.slice(i+n.length);any=true}});
+  return out;
+}
 function relCards(f){
   const list=RELEASES.filter(r=>relMatch(r,f));
   if(!list.length)return '<p class="mono" style="grid-column:1/-1">Nothing here yet.</p>';
-  return list.map((r,i)=>{const c=COLS[i%4];const u=safeUrl(r.url)||'https://socksonrecords.bandcamp.com/music';return `<article><a href="${u}" style="text-decoration:none">${cover(r.title,c[0],c[1],28,r.cover_url)}</a><h3 class="disp" style="font-size:22px;margin:18px 0 6px">${esc(r.title)}</h3><p class="mono" style="margin-bottom:4px">${esc(r.artist)}</p><p class="mono" style="color:var(--muted);margin-bottom:14px">${r.released_text?esc(r.released_text):'&nbsp;'}</p><a class="btn small" href="${u}">Listen &#8599;</a></article>`}).join('');
+  return list.map((r,i)=>{const c=COLS[i%4];const u=safeUrl(r.url)||'https://socksonrecords.bandcamp.com/music';return `<article><a href="${u}" style="text-decoration:none">${cover(r.title,c[0],c[1],28,r.cover_url)}</a><h3 class="disp" style="font-size:22px;margin:18px 0 6px">${esc(r.title)}</h3><p class="mono" style="margin-bottom:4px">${artistLink(r)}</p><p class="mono" style="color:var(--muted);margin-bottom:14px">${r.released_text?esc(r.released_text):'&nbsp;'}</p><a class="btn small" href="${u}">Listen &#8599;</a></article>`}).join('');
 }
 function relCount(f){const n=RELEASES.filter(r=>relMatch(r,f)).length;return n+(n===1?' release':' releases')}
 function releases(){
