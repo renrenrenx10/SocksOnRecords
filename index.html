@@ -3,7 +3,28 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Socks On Records - website preview</title>
+<title>Socks On Records | DIY punk label, Peterborough &amp; King's Lynn</title>
+<meta name="description" content="Socks On Records is a DIY, non-profit record label and gig promoter in Peterborough and King's Lynn. Meet the bands, find gigs, releases, videos, Socks On Sessions and merch.">
+<link rel="canonical" href="https://socksonrecords.uk/">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="theme-color" content="#16130F">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:site_name" content="Socks On Records">
+<meta property="og:locale" content="en_GB">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Socks On Records | DIY punk label, Peterborough &amp; King's Lynn">
+<meta property="og:description" content="Socks On Records is a DIY, non-profit record label and gig promoter in Peterborough and King's Lynn. Meet the bands, find gigs, releases, videos, Socks On Sessions and merch.">
+<meta property="og:url" content="https://socksonrecords.uk/">
+<meta property="og:image" content="https://socksonrecords.uk/og-image.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Socks On Records logo">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Socks On Records | DIY punk label, Peterborough &amp; King's Lynn">
+<meta name="twitter:description" content="Socks On Records is a DIY, non-profit record label and gig promoter in Peterborough and King's Lynn. Meet the bands, find gigs, releases, videos, Socks On Sessions and merch.">
+<meta name="twitter:image" content="https://socksonrecords.uk/og-image.jpg">
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "Organization", "@id": "https://socksonrecords.uk/#org", "name": "Socks On Records", "url": "https://socksonrecords.uk/", "logo": "https://socksonrecords.uk/apple-touch-icon.png", "image": "https://socksonrecords.uk/og-image.jpg", "description": "DIY, non-profit record label, gig promoters and community in Peterborough and King's Lynn.", "email": "socksonrecords@gmail.com", "areaServed": "East of England", "sameAs": ["https://www.instagram.com/socks_on_records/", "https://www.instagram.com/socksongraphics/", "https://socksonrecords.bigcartel.com/"]}, {"@type": "WebSite", "@id": "https://socksonrecords.uk/#site", "url": "https://socksonrecords.uk/", "name": "Socks On Records", "inLanguage": "en-GB", "publisher": {"@id": "https://socksonrecords.uk/#org"}}]}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
@@ -124,6 +145,7 @@ img{display:block;max-width:100%}
 </style>
 </head>
 <body>
+<noscript><div style="padding:24px;font-family:sans-serif"><h1>Socks On Records</h1><p>DIY, non-profit record label and gig promoters in Peterborough and King's Lynn.</p><p><a href="/roster/">Roster</a> &middot; <a href="/gigs/">Gigs</a> &middot; <a href="/releases/">Releases</a> &middot; <a href="/videos/">Videos</a> &middot; <a href="/sessions/">Sessions</a> &middot; <a href="/merch/">Merch &amp; Tickets</a> &middot; <a href="/contact/">Contact</a></p></div></noscript>
 
 <header class="banner"><div class="wrap">
 <a class="logo" href="#/" aria-label="Socks On Records home"><img data-logo alt="Socks On Records"></a>
@@ -413,7 +435,7 @@ function contact(){
 <div class="field"><label for="c-topic">What's it about?</label><select id="c-topic"><option>Gig enquiry</option><option>My band, join the roster</option><option>Merch</option><option>Something else</option></select></div>
 <div class="field"><label for="c-msg">Message</label><textarea id="c-msg"></textarea></div>
 <button class="btn red" type="submit">Send it</button>
-<p id="c-note" class="mono ph" hidden style="margin-top:18px;display:inline-block">Preview only: the form isn't live yet. Email us in the meantime.</p>
+<p id="c-note" class="mono" hidden style="margin-top:18px">Your email app should have opened with your message ready to send. If it didn't, email socksonrecords@gmail.com.</p>
 </form>
 <div>
 <h2 class="disp" style="font-size:36px;margin-bottom:12px">Or the old-fashioned way</h2>
@@ -563,10 +585,14 @@ function route(){
   view.querySelectorAll('.panel:not([hidden]) iframe[data-src]').forEach(i=>{i.src=i.dataset.src});
   document.querySelectorAll('.nav a[data-p]').forEach(x=>x.classList.toggle('on',x.dataset.p===(key==='band'?'roster':key)));
   const names={home:'Home',roster:'Roster',band:'Band',gigs:'Gigs',releases:'Releases',videos:'Videos',sessions:'Socks On Sessions',shop:'Merch & Tickets',contact:'Contact'};
-  document.title='Socks On Records - '+(names[key]||'Home');
+  document.title=(key==='home'||!names[key])?"Socks On Records | DIY punk label, Peterborough & King's Lynn":names[key]+' | Socks On Records';
   window.scrollTo(0,0);
   const f=document.getElementById('c-form');
-  if(f) f.addEventListener('submit',e=>{e.preventDefault();document.getElementById('c-note').hidden=false;});
+  if(f) f.addEventListener('submit',e=>{e.preventDefault();
+    const v=id=>(document.getElementById(id).value||'').trim();
+    const body='Hi Socks On Records,\n\n'+v('c-msg')+'\n\n'+(v('c-name')?v('c-name'):'')+(v('c-email')?'\n'+v('c-email'):'');
+    location.href='mailto:socksonrecords@gmail.com?subject='+encodeURIComponent(v('c-topic')+(v('c-name')?' ('+v('c-name')+')':''))+'&body='+encodeURIComponent(body);
+    document.getElementById('c-note').hidden=false;});
   const nf=document.getElementById('n-form');
   if(nf) nf.addEventListener('submit',e=>{e.preventDefault();subscribe(nf)});
 }
