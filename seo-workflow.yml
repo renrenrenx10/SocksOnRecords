@@ -1,0 +1,32 @@
+name: Refresh search pages
+
+# Rebuilds the crawlable pages (band pages, gigs, releases, sitemap) from the live data.
+# Runs every day, whenever you push, and on demand from the Actions tab ("Run workflow").
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "tools/generate_seo.py"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Generate pages
+        run: python tools/generate_seo.py
+      - name: Commit changes
+        run: |
+          git config user.name "socks-on-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A roster band gigs releases videos sessions merch contact 404.html sitemap.xml robots.txt
+          if git diff --cached --quiet; then echo "No changes"; else git commit -m "Refresh search pages"; git push; fi
