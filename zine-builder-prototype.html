@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Zine Page Builder</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Old+Standard+TT:ital,wght@0,400;0,700;1,400&family=Permanent+Marker&family=Anton&family=Rock+Salt&family=Courier+Prime:wght@400;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
 /* app shell: fixed header + a canvas that is measured in JS and sized to fill whatever space is left
    (height-constrained on a phone, width-constrained on a tall desktop window) -- never fought over with
@@ -22,13 +23,16 @@
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100vh;height:100dvh}
-body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Special Elite","Courier New",monospace;overflow:hidden;display:flex;justify-content:center}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;overflow:hidden;display:flex;justify-content:center}
 
 #app{width:100%;max-width:480px;height:100%;display:flex;flex-direction:column;padding-inline:14px;min-width:0}
 
-#topbar{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;padding-block:calc(10px + env(safe-area-inset-top,0px)) 8px;border-bottom:1.5px solid var(--line)}
-#topbar h1{font:400 21px/1 "Permanent Marker",cursive;margin:0}
-#menuBtn{font:700 12px "Courier Prime",monospace;background:var(--card);border:1.5px solid var(--line);color:var(--fg);padding:8px 12px;cursor:pointer;white-space:nowrap}
+#topbar{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:8px;padding-block:calc(10px + env(safe-area-inset-top,0px)) 8px;border-bottom:1.5px solid var(--line)}
+#topbar h1{font-weight:700;font-size:16px;margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#topbar .tbtns{display:flex;gap:5px;flex:0 0 auto}
+#menuBtn,#aboutBtn{font-weight:700;font-size:11px;background:var(--card);border:1.5px solid var(--line);color:var(--fg);padding:7px 8px;cursor:pointer;white-space:nowrap}
+#saveBtn{font-weight:700;font-size:11px;background:var(--accent);border:1.5px solid var(--accent);color:#fff;padding:7px 8px;cursor:pointer;white-space:nowrap}
+#saveBtn:disabled{opacity:.6}
 
 #canvasWrap{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;padding:12px 0;position:relative}
 .page{position:relative;background:#f3efe2;aspect-ratio:210/297;overflow:hidden;touch-action:none;transition:background .25s;box-shadow:0 2px 10px rgba(0,0,0,.25);container-type:inline-size;container-name:page}
@@ -41,21 +45,24 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Special Elite"
 #selectionBar[hidden]{display:none}
 
 .selbar{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 6px;min-height:30px}
-.selbar button{font:700 11px "Courier Prime",monospace;background:#1d1b16;color:#efe9d8;border:none;padding:7px 10px;cursor:pointer}
+.selbar button{font-weight:700;font-size:11px;background:#1d1b16;color:#efe9d8;border:none;padding:7px 10px;cursor:pointer}
 .selbar button.danger{background:var(--accent)}
 .selbar button[aria-pressed="true"]{outline:2px solid var(--accent);outline-offset:-2px}
-.selbar select{font:700 11px "Courier Prime",monospace;background:#1d1b16;color:#efe9d8;border:none;padding:7px 8px;cursor:pointer}
+.selbar select{font-weight:700;font-size:11px;background:#1d1b16;color:#efe9d8;border:none;padding:7px 8px;cursor:pointer}
 .selrow{display:flex;flex-wrap:wrap;gap:6px}
 
-.el{position:absolute;box-sizing:border-box;cursor:grab;display:flex;align-items:center;justify-content:center;text-align:center;padding:4%;overflow:hidden;line-height:1.25}
+/* .el is just the draggable/rotatable hit-box: no clipping, so the resize/rotate handles
+   (positioned outside its edge) are never cropped even on odd, clip-path-shaped pieces.
+   .shape is the inner visual card: background, clip-path, border, font, text -- all live here. */
+.el{position:absolute;box-sizing:border-box;cursor:grab}
 .el.dragging{cursor:grabbing}
-.el.text{text-align:left;display:block}
-.el.bubble,.el.ticket{text-align:left;display:block}
-.el[contenteditable="true"]{cursor:text;outline:1.5px dashed var(--accent);outline-offset:1px}
-.el.photo{overflow:hidden;padding:0}
-.el.photo img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+.shape{position:absolute;inset:0;box-sizing:border-box;display:flex;align-items:center;justify-content:center;text-align:center;padding:4%;overflow:hidden;line-height:1.25}
+.el.text .shape,.el.bubble .shape,.el.ticket .shape{text-align:left;display:block}
+.shape[contenteditable="true"]{cursor:text;outline:1.5px dashed var(--accent);outline-offset:1px}
+.el.photo .shape{overflow:hidden;padding:0}
+.el.photo .shape img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
 .el.photo .add{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:700 2.6cqw "Courier Prime",monospace;color:#6b6659;text-align:center;pointer-events:none}
-.el.selected{outline:1.5px solid var(--accent);outline-offset:1px}
+.el.selected .shape{outline:1.5px solid var(--accent);outline-offset:1px}
 .handle{position:absolute;width:28px;height:28px;border:2px solid var(--bg);border-radius:50%;cursor:nwse-resize;display:none;font-size:13px;align-items:center;justify-content:center;color:#fff;line-height:1;touch-action:none;z-index:5}
 .handle.resize{right:-13px;bottom:-13px;background:var(--accent)}
 .handle.rotate{left:50%;top:-36px;transform:translateX(-50%);background:#2e6b4f;cursor:grab}
@@ -64,22 +71,22 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Special Elite"
 /* drawer */
 #backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:opacity .2s;z-index:40}
 #backdrop.open{opacity:1;pointer-events:auto}
-#drawer{position:fixed;left:0;right:0;bottom:0;max-height:76vh;background:var(--bg);border-top:2px solid var(--line);border-radius:14px 14px 0 0;
+.sheet{position:fixed;left:0;right:0;bottom:0;max-height:76vh;background:var(--bg);border-top:2px solid var(--line);border-radius:14px 14px 0 0;
   transform:translateY(100%);transition:transform .25s ease;z-index:41;display:flex;flex-direction:column;
   padding-bottom:env(safe-area-inset-bottom,0px);box-shadow:0 -4px 18px rgba(0,0,0,.3)}
-#drawer.open{transform:translateY(0)}
+.sheet.open{transform:translateY(0)}
 .drawerHead{flex:0 0 auto;display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1.5px solid var(--line)}
-.drawerHead strong{font:400 18px "Permanent Marker",cursive}
-.drawerHead button{font:700 12px "Courier Prime",monospace;background:none;border:1.5px solid var(--line);color:var(--fg);padding:6px 10px;cursor:pointer}
+.drawerHead strong{font-weight:700;font-size:16px}
+.drawerHead button{font-weight:700;font-size:12px;background:none;border:1.5px solid var(--line);color:var(--fg);padding:6px 10px;cursor:pointer}
 .drawerBody{overflow-y:auto;padding:14px;-webkit-overflow-scrolling:touch}
 .drawerBody section{margin:0 0 20px}
 .drawerBody section:last-child{margin-bottom:4px}
-.drawerBody h2{font:700 11px "Courier Prime",monospace;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:0 0 8px}
+.drawerBody h2{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:0 0 8px}
 .drawerHint{font-size:12px;color:var(--mut);margin:0 0 16px;line-height:1.5}
 
 .ctl{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 10px}
 .ctl span.lbl{font-size:11.5px;color:var(--mut)}
-.ctl button{font:700 12px "Courier Prime",monospace;background:none;border:1.5px solid var(--line);color:var(--fg);padding:5px 9px;cursor:pointer}
+.ctl button{font-weight:700;font-size:12px;background:none;border:1.5px solid var(--line);color:var(--fg);padding:5px 9px;cursor:pointer}
 .ctl button[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
 .swatch{width:18px;height:18px;border:1.5px solid var(--line);padding:0;cursor:pointer}
 .swatch[aria-pressed="true"]{outline:2px solid var(--accent);outline-offset:1px}
@@ -87,15 +94,20 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Special Elite"
 .row input[type=range]{flex:1}
 
 .toolbar{display:flex;flex-wrap:wrap;gap:6px}
-.toolbar button{flex:1 1 30%;min-width:84px;font:700 11px "Courier Prime",monospace;background:var(--card);border:1.5px solid var(--line);color:var(--fg);padding:8px 4px;cursor:pointer}
+.toolbar button{flex:1 1 30%;min-width:84px;font-weight:700;font-size:11px;background:var(--card);border:1.5px solid var(--line);color:var(--fg);padding:8px 4px;cursor:pointer}
 .toolbar button:active{background:var(--accent);color:#fff;border-color:var(--accent)}
 
 .layerrow{display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid rgba(0,0,0,.08)}
 .layerrow:last-child{border-bottom:none}
-.layerrow button.name{flex:1;text-align:left;background:none;border:none;color:var(--fg);font:700 12px "Courier Prime",monospace;cursor:pointer;padding:3px 0}
+.layerrow button.name{flex:1;text-align:left;background:none;border:none;color:var(--fg);font-weight:700;font-size:12px;cursor:pointer;padding:3px 0}
 .layerrow.active button.name{color:var(--accent)}
 .layerrow button.mini{font-size:14px;background:none;border:1px solid var(--line);color:var(--fg);width:26px;height:26px;cursor:pointer;line-height:1}
 .empty-layers{font-size:12px;color:var(--mut)}
+
+.aboutBody p{margin:0 0 10px;font-size:13px;line-height:1.55}
+.aboutBody ul{margin:0 0 18px;padding-left:20px;font-size:13px;line-height:1.6}
+.aboutBody li{margin:0 0 4px}
+.aboutBody h2{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:0 0 8px}
 </style>
 </head>
 <body>
@@ -123,7 +135,11 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Special Elite"
 <div id="app">
   <div id="topbar">
     <h1>Zine Page Builder</h1>
-    <button id="menuBtn">☰ Menu</button>
+    <div class="tbtns">
+      <button id="saveBtn">⬇ Save</button>
+      <button id="aboutBtn">? About</button>
+      <button id="menuBtn">☰ Menu</button>
+    </div>
   </div>
 
   <div id="canvasWrap">
@@ -137,7 +153,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Special Elite"
 </div>
 
 <div id="backdrop"></div>
-<div id="drawer">
+<div id="drawer" class="sheet">
   <div class="drawerHead">
     <strong>Menu</strong>
     <button id="drawerClose">Close</button>
@@ -186,6 +202,34 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Special Elite"
   </div>
 </div>
 
+<div id="aboutPanel" class="sheet">
+  <div class="drawerHead">
+    <strong>About this builder</strong>
+    <button id="aboutClose">Close</button>
+  </div>
+  <div class="drawerBody aboutBody">
+    <h2>What you can do</h2>
+    <ul>
+      <li>Add text scraps, a photo, a headline bar, a burst, a speech bubble, a circle badge, an arrow banner, a ticket stub, a stamp or an outlined note.</li>
+      <li>Drag a piece to move it, drag its red dot to resize, drag its green dot to rotate — or use "Tilt it" / "Straighten" for a quick angle.</li>
+      <li>Tap a selected text piece again to edit the words.</li>
+      <li>Change a piece's text size (S–XXL), font and colour (invert), and replace a photo any time.</li>
+      <li>Turn the photocopier harshness up or down for the whole page, or keep one piece "clean" while the rest gets copied.</li>
+      <li>Reorder layers front-to-back, delete a piece, and pick the paper colour.</li>
+      <li>Save the page as an image to look at or share outside the browser.</li>
+    </ul>
+    <h2>What it can't do (yet)</h2>
+    <ul>
+      <li>Doesn't save anything — close the tab or reload and your page is gone, so save an image before you leave.</li>
+      <li>One page at a time — no spreads or multi-page zines yet.</li>
+      <li>No undo — if you delete something or mess up a piece, you'll need to re-add it.</li>
+      <li>Very long text in a small piece will just get clipped, not shrunk to fit.</li>
+      <li>No multi-select — pieces are moved and resized one at a time.</li>
+      <li>The saved image is a best-effort snapshot — the photocopy filter sometimes doesn't carry over perfectly.</li>
+    </ul>
+  </div>
+</div>
+
 <script>
 (function(){
   "use strict";
@@ -208,10 +252,18 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Special Elite"
   function rnd(min,max){ return min + Math.random()*(max-min); }
 
   // --- drawer open/close ---
-  function openDrawer(){ drawer.classList.add("open"); backdrop.classList.add("open"); }
-  function closeDrawer(){ drawer.classList.remove("open"); backdrop.classList.remove("open"); }
-  document.getElementById("menuBtn").addEventListener("click", openDrawer);
+  var aboutPanel = document.getElementById("aboutPanel");
+  var panels = [drawer, aboutPanel];
+  function openPanel(panel){
+    panels.forEach(function(p){ p.classList.remove("open"); });
+    panel.classList.add("open");
+    backdrop.classList.add("open");
+  }
+  function closeDrawer(){ panels.forEach(function(p){ p.classList.remove("open"); }); backdrop.classList.remove("open"); }
+  document.getElementById("menuBtn").addEventListener("click", function(){ openPanel(drawer); });
   document.getElementById("drawerClose").addEventListener("click", closeDrawer);
+  document.getElementById("aboutBtn").addEventListener("click", function(){ openPanel(aboutPanel); });
+  document.getElementById("aboutClose").addEventListener("click", closeDrawer);
   backdrop.addEventListener("click", closeDrawer);
 
   // --- canvas sizing: measure the real space available and fit the portrait page into it (object-fit: contain) ---
@@ -238,7 +290,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Special Elite"
     hand:      { label:"Handwritten", css:'"Rock Salt",cursive' },
     anton:     { label:"Headline (Anton)", css:'Anton,Impact,sans-serif' }
   };
-  var SIZES = { S:0.75, M:1, L:1.4 };
+  var SIZES = { S:0.75, M:1, L:1.4, XL:1.9, XXL:2.5 };
 
   function starPolygon(spikes, outerR, innerR){
     var pts = [];
@@ -298,10 +350,17 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Special Elite"
   }
 
   // --- build a persistent DOM node for an element (created once, updated in place forever after) ---
+  // .el is the plain, unclipped hit-box that's dragged/rotated/resized; .shape is the inner
+  // visual card (background/clip-path/border/font/text). Handles live on .el, outside .shape's
+  // clip, so they're always reachable even on star/odd-shaped pieces.
   function createDiv(e){
     var div = document.createElement("div");
     div.className = "el " + e.type;
     div.setAttribute("data-id", e.id);
+
+    var shapeEl = document.createElement("div");
+    shapeEl.className = "shape";
+    div.appendChild(shapeEl);
 
     if(e.type === "photo"){
       var img = document.createElement("img");
@@ -309,8 +368,8 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Special Elite"
       var add = document.createElement("span");
       add.className = "add";
       add.textContent = "+ tap to add a photo";
-      div.appendChild(img);
-      div.appendChild(add);
+      shapeEl.appendChild(img);
+      shapeEl.appendChild(add);
     }
     var rotHandle = document.createElement("div");
     rotHandle.className = "handle rotate";
@@ -336,6 +395,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Special Elite"
   function updateDiv(e){
     var div = domMap[e.id];
     if(!div) return;
+    var shapeEl = div.querySelector(".shape");
     div.style.left = e.x+"%"; div.style.top = e.y+"%";
     div.style.width = e.w+"%"; div.style.height = e.h+"%";
     div.style.zIndex = e.z;
@@ -343,44 +403,40 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Special Elite"
     div.classList.toggle("selected", e.id===selectedId);
 
     var dropShadow = "drop-shadow(1px 1.5px 1px rgba(0,0,0,.4))";
-    div.style.filter = (e.filtered && !globalClean ? "url(#copier) " : "") + dropShadow;
+    shapeEl.style.filter = (e.filtered && !globalClean ? "url(#copier) " : "") + dropShadow;
 
-    var shape = SHAPES[e.type];
+    var def = SHAPES[e.type];
     if(e.type === "photo"){
-      var img = div.querySelector("img");
-      var add = div.querySelector(".add");
+      var img = shapeEl.querySelector("img");
+      var add = shapeEl.querySelector(".add");
       if(e.content){
         img.src = e.content; img.style.display = "block"; add.style.display = "none";
-        div.style.background = "transparent";
+        shapeEl.style.background = "transparent";
       } else {
         img.style.display = "none"; add.style.display = "flex";
-        div.style.background = "#d8d2bd";
+        shapeEl.style.background = "#d8d2bd";
       }
       return;
     }
 
     // text-bearing shapes
-    var clip = shape.clip === "random-torn" ? e.textClip : (shape.clip || "none");
-    div.style.clipPath = clip;
-    div.style.borderRadius = shape.round ? "50%" : "0";
-    if(shape.border === "double"){ div.style.border = "3px solid "+(e.inverted?shape.bg:shape.fg); div.style.outline = "1px solid "+(e.inverted?shape.bg:shape.fg); div.style.outlineOffset = "3px"; }
-    else if(shape.border === "single"){ div.style.border = "2.5px solid "+(e.inverted?shape.bg:shape.fg); div.style.outline = "none"; }
-    else { div.style.border = "none"; div.style.outline = "none"; }
+    var clip = def.clip === "random-torn" ? e.textClip : (def.clip || "none");
+    shapeEl.style.clipPath = clip;
+    shapeEl.style.borderRadius = def.round ? "50%" : "0";
+    if(def.border === "double"){ shapeEl.style.border = "3px solid "+(e.inverted?def.bg:def.fg); shapeEl.style.outline = "1px solid "+(e.inverted?def.bg:def.fg); shapeEl.style.outlineOffset = "3px"; }
+    else if(def.border === "single"){ shapeEl.style.border = "2.5px solid "+(e.inverted?def.bg:def.fg); shapeEl.style.outline = "none"; }
+    else { shapeEl.style.border = "none"; shapeEl.style.outline = "none"; }
 
-    div.style.textAlign = shape.align;
-    div.style.justifyContent = shape.align === "left" ? "flex-start" : "center";
-    var bg = e.inverted ? shape.fg : shape.bg;
-    var fg = e.inverted ? shape.bg : shape.fg;
-    div.style.background = bg;
-    div.style.color = fg;
-    div.style.fontFamily = (FONTS[e.font] || FONTS[shape.font]).css;
-    div.style.fontSize = (shape.baseCq * (SIZES[e.size]||1)).toFixed(2) + "cqw";
-    if(div.getAttribute("contenteditable") !== "true"){
-      var rotHandle = div.querySelector(".handle.rotate");
-      var resizeHandle = div.querySelector(".handle.resize");
-      div.textContent = e.content;
-      div.appendChild(rotHandle);
-      div.appendChild(resizeHandle);
+    shapeEl.style.textAlign = def.align;
+    shapeEl.style.justifyContent = def.align === "left" ? "flex-start" : "center";
+    var bg = e.inverted ? def.fg : def.bg;
+    var fg = e.inverted ? def.bg : def.fg;
+    shapeEl.style.background = bg;
+    shapeEl.style.color = fg;
+    shapeEl.style.fontFamily = (FONTS[e.font] || FONTS[def.font]).css;
+    shapeEl.style.fontSize = (def.baseCq * (SIZES[e.size]||1)).toFixed(2) + "cqw";
+    if(shapeEl.getAttribute("contenteditable") !== "true"){
+      shapeEl.textContent = e.content;
     }
   }
 
@@ -531,7 +587,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Special Elite"
       invertBtn.addEventListener("click", function(){ e.inverted = !e.inverted; updateDiv(e); renderSelbar(); });
       selrow.appendChild(invertBtn);
 
-      ["S","M","L"].forEach(function(s){
+      ["S","M","L","XL","XXL"].forEach(function(s){
         var b = document.createElement("button");
         b.textContent = s;
         b.setAttribute("aria-pressed", String(e.size===s));
@@ -555,30 +611,27 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Special Elite"
     selectEl(id);
     var div = domMap[id];
     if(!div) return;
-    div.setAttribute("contenteditable","true");
-    div.focus();
+    var shapeEl = div.querySelector(".shape");
+    shapeEl.setAttribute("contenteditable","true");
+    shapeEl.focus();
     var range = document.createRange();
-    range.selectNodeContents(div);
+    range.selectNodeContents(shapeEl);
     range.collapse(false);
     var sel = window.getSelection();
     sel.removeAllRanges(); sel.addRange(range);
 
     function onInput(){
       var e = byId(id);
-      if(e) e.content = div.textContent;
+      if(e) e.content = shapeEl.textContent;
       renderLayers();
     }
     function onBlur(){
-      div.removeAttribute("contenteditable");
-      var rotHandle = div.querySelector(".handle.rotate");
-      var resizeHandle = div.querySelector(".handle.resize");
-      if(rotHandle) div.appendChild(rotHandle);
-      if(resizeHandle) div.appendChild(resizeHandle);
-      div.removeEventListener("input", onInput);
-      div.removeEventListener("blur", onBlur);
+      shapeEl.removeAttribute("contenteditable");
+      shapeEl.removeEventListener("input", onInput);
+      shapeEl.removeEventListener("blur", onBlur);
     }
-    div.addEventListener("input", onInput);
-    div.addEventListener("blur", onBlur);
+    shapeEl.addEventListener("input", onInput);
+    shapeEl.addEventListener("blur", onBlur);
   }
 
   function pickPhoto(id){
@@ -602,7 +655,9 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Special Elite"
 
   function onElPointerDown(ev, id){
     var div = domMap[id];
-    if(!div || div.getAttribute("contenteditable")==="true") return;
+    if(!div) return;
+    var shapeEl = div.querySelector(".shape");
+    if(shapeEl && shapeEl.getAttribute("contenteditable")==="true") return;
     if(ev.target.classList.contains("handle")) return;
 
     var wasSelected = (selectedId === id);
@@ -761,6 +816,60 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Special Elite"
     applyHarshness(parseInt(harsh.value,10));
   });
   applyHarshness(parseInt(harsh.value,10));
+
+  // --- save/export: rasterize the page to a PNG so it can be looked at or shared outside the browser.
+  // best-effort -- the html2canvas library can't always reproduce the SVG photocopier filter.
+  // Inside the claude.ai artifact viewer a plain download link does nothing, so this offers the
+  // file through the platform's downloads capability when it's present, and falls back to a normal
+  // browser download (for when this file is hosted on its own, e.g. on Rene's own site).
+  var saveBtn = document.getElementById("saveBtn");
+  function saveBlob(blob, filename){
+    if(window.claude && typeof window.claude.use === "function"){
+      window.claude.use("downloads").then(function(downloads){
+        if(!downloads){ saveBlobDirect(blob, filename); return; }
+        downloads.save({ filename: filename, data: blob }).catch(function(err){
+          if(err && err.code === "declined") return;
+          saveBlobDirect(blob, filename);
+        });
+      }).catch(function(){ saveBlobDirect(blob, filename); });
+    } else {
+      saveBlobDirect(blob, filename);
+    }
+  }
+  function saveBlobDirect(blob, filename){
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+  }
+  saveBtn.addEventListener("click", function(){
+    if(typeof html2canvas === "undefined"){
+      alert("Couldn't load the image export tool — check your connection and try again.");
+      return;
+    }
+    var prevSelected = selectedId;
+    selectEl(null); // hide handles/selection outline for a clean export
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Saving…";
+    requestAnimationFrame(function(){
+      html2canvas(page, { backgroundColor: null, scale: 3, useCORS: true }).then(function(canvas){
+        canvas.toBlob(function(blob){
+          if(!blob){ alert("Couldn't export the image — try again, or take a screenshot instead."); return; }
+          saveBlob(blob, "zine-page.png");
+        });
+      }).catch(function(){
+        alert("Couldn't export the image — try again, or take a screenshot instead.");
+      }).then(function(){
+        saveBtn.disabled = false;
+        saveBtn.textContent = "⬇ Save";
+        if(prevSelected) selectEl(prevSelected);
+      });
+    });
+  });
 
   // starter content so the page isn't empty on load
   addEl("rect", { x:10, y:4, w:80, h:11, content:"SCUFF — ISSUE ONE" });
