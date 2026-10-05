@@ -1,0 +1,756 @@
+<title>Zine Page Builder</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Old+Standard+TT:ital,wght@0,400;0,700;1,400&family=Permanent+Marker&family=Anton&family=Rock+Salt&family=Courier+Prime:wght@400;700&display=swap">
+<style>
+/* app shell: fixed header + a canvas that is measured in JS and sized to fill whatever space is left
+   (height-constrained on a phone, width-constrained on a tall desktop window) -- never fought over with
+   CSS percentages. Everything that isn't the canvas itself (add-shape, page settings, layers) lives in a
+   drawer that overlays the canvas and takes zero permanent layout space; picking a shape closes it
+   automatically so you land straight back on the canvas with the new piece selected. */
+:root{
+  --bg:#eeeae1; --fg:#201e1a; --mut:#6b6659; --line:#201e1a;
+  --accent:#b33a2e; --card:#f7f4ec;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){ --bg:#17160f; --fg:#eee9dc; --mut:#aaa38f; --line:#eee9dc; --card:#221f17; color-scheme:dark; }
+}
+:root[data-theme="dark"]{ --bg:#17160f; --fg:#eee9dc; --mut:#aaa38f; --line:#eee9dc; --card:#221f17; color-scheme:dark; }
+
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Special Elite","Courier New",monospace;overflow:hidden;display:flex;justify-content:center}
+
+#app{width:100%;max-width:480px;height:100%;display:flex;flex-direction:column;padding-inline:14px;min-width:0}
+
+#topbar{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;padding-block:10px 8px;border-bottom:1.5px solid var(--line)}
+#topbar h1{font:400 21px/1 "Permanent Marker",cursive;margin:0}
+#menuBtn{font:700 12px "Courier Prime",monospace;background:var(--card);border:1.5px solid var(--line);color:var(--fg);padding:8px 12px;cursor:pointer;white-space:nowrap}
+
+#canvasWrap{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;padding:12px 0;position:relative}
+.page{position:relative;background:#f3efe2;aspect-ratio:210/297;overflow:hidden;touch-action:none;transition:background .25s;box-shadow:0 2px 10px rgba(0,0,0,.25)}
+.page.stock-pink{background:#f1dde0}
+.page.stock-green{background:#dde7d6}
+.page.stock-yellow{background:#f2eac4}
+.page.stock-white{background:#f3efe2}
+
+#selectionBar{flex:0 0 auto;border-top:1.5px solid var(--line);background:var(--card);padding:8px 0 calc(8px + env(safe-area-inset-bottom,0px))}
+#selectionBar[hidden]{display:none}
+
+.selbar{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 6px;min-height:30px}
+.selbar button{font:700 11px "Courier Prime",monospace;background:#1d1b16;color:#efe9d8;border:none;padding:7px 10px;cursor:pointer}
+.selbar button.danger{background:var(--accent)}
+.selbar button[aria-pressed="true"]{outline:2px solid var(--accent);outline-offset:-2px}
+.selbar select{font:700 11px "Courier Prime",monospace;background:#1d1b16;color:#efe9d8;border:none;padding:7px 8px;cursor:pointer}
+.selrow{display:flex;flex-wrap:wrap;gap:6px}
+
+.el{position:absolute;box-sizing:border-box;cursor:grab;display:flex;align-items:center;justify-content:center;text-align:center;padding:4%;overflow:hidden;line-height:1.25}
+.el.dragging{cursor:grabbing}
+.el.text{text-align:left;display:block}
+.el.bubble,.el.ticket{text-align:left;display:block}
+.el[contenteditable="true"]{cursor:text;outline:1.5px dashed var(--accent);outline-offset:1px}
+.el.photo{overflow:hidden;padding:0}
+.el.photo img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+.el.photo .add{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:700 2.6vw "Courier Prime",monospace;color:#6b6659;text-align:center;pointer-events:none}
+.el.selected{outline:1.5px solid var(--accent);outline-offset:1px}
+.handle{position:absolute;width:16px;height:16px;border:2px solid var(--bg);border-radius:50%;cursor:nwse-resize;display:none;font-size:9px;align-items:center;justify-content:center;color:#fff;line-height:1}
+.handle.resize{right:-7px;bottom:-7px;background:var(--accent)}
+.handle.rotate{left:50%;top:-24px;transform:translateX(-50%);background:#2e6b4f;cursor:grab}
+.el.selected .handle{display:flex}
+
+/* drawer */
+#backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:opacity .2s;z-index:40}
+#backdrop.open{opacity:1;pointer-events:auto}
+#drawer{position:fixed;left:0;right:0;bottom:0;max-height:76vh;background:var(--bg);border-top:2px solid var(--line);border-radius:14px 14px 0 0;
+  transform:translateY(100%);transition:transform .25s ease;z-index:41;display:flex;flex-direction:column;
+  padding-bottom:env(safe-area-inset-bottom,0px);box-shadow:0 -4px 18px rgba(0,0,0,.3)}
+#drawer.open{transform:translateY(0)}
+.drawerHead{flex:0 0 auto;display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1.5px solid var(--line)}
+.drawerHead strong{font:400 18px "Permanent Marker",cursive}
+.drawerHead button{font:700 12px "Courier Prime",monospace;background:none;border:1.5px solid var(--line);color:var(--fg);padding:6px 10px;cursor:pointer}
+.drawerBody{overflow-y:auto;padding:14px;-webkit-overflow-scrolling:touch}
+.drawerBody section{margin:0 0 20px}
+.drawerBody section:last-child{margin-bottom:4px}
+.drawerBody h2{font:700 11px "Courier Prime",monospace;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:0 0 8px}
+.drawerHint{font-size:12px;color:var(--mut);margin:0 0 16px;line-height:1.5}
+
+.ctl{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 10px}
+.ctl span.lbl{font-size:11.5px;color:var(--mut)}
+.ctl button{font:700 12px "Courier Prime",monospace;background:none;border:1.5px solid var(--line);color:var(--fg);padding:5px 9px;cursor:pointer}
+.ctl button[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
+.swatch{width:18px;height:18px;border:1.5px solid var(--line);padding:0;cursor:pointer}
+.swatch[aria-pressed="true"]{outline:2px solid var(--accent);outline-offset:1px}
+.row{display:flex;align-items:center;gap:8px;font-size:13px;margin:0;color:var(--mut)}
+.row input[type=range]{flex:1}
+
+.toolbar{display:flex;flex-wrap:wrap;gap:6px}
+.toolbar button{flex:1 1 30%;min-width:84px;font:700 11px "Courier Prime",monospace;background:var(--card);border:1.5px solid var(--line);color:var(--fg);padding:8px 4px;cursor:pointer}
+.toolbar button:active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+.layerrow{display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid rgba(0,0,0,.08)}
+.layerrow:last-child{border-bottom:none}
+.layerrow button.name{flex:1;text-align:left;background:none;border:none;color:var(--fg);font:700 12px "Courier Prime",monospace;cursor:pointer;padding:3px 0}
+.layerrow.active button.name{color:var(--accent)}
+.layerrow button.mini{font-size:14px;background:none;border:1px solid var(--line);color:var(--fg);width:26px;height:26px;cursor:pointer;line-height:1}
+.empty-layers{font-size:12px;color:var(--mut)}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="copier" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+    <feColorMatrix type="saturate" values="0"/>
+    <feGaussianBlur id="fBlur" stdDeviation="0.35" result="g"/>
+    <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="7" result="n"/>
+    <feColorMatrix in="n" type="matrix" values="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 0 0 0 0 1" result="nn"/>
+    <feComposite id="fComp" in="g" in2="nn" operator="arithmetic" k1="0" k2="1" k3="0.18" k4="-0.09" result="m"/>
+    <feComponentTransfer id="fXfer">
+      <feFuncR type="linear" slope="1.35" intercept="-0.18"/>
+      <feFuncG type="linear" slope="1.35" intercept="-0.18"/>
+      <feFuncB type="linear" slope="1.35" intercept="-0.18"/>
+    </feComponentTransfer>
+    <feComponentTransfer>
+      <feFuncR id="tR" type="table" tableValues="0.09 0.96"/>
+      <feFuncG id="tG" type="table" tableValues="0.09 0.95"/>
+      <feFuncB id="tB" type="table" tableValues="0.1 0.9"/>
+    </feComponentTransfer>
+  </filter>
+</svg>
+
+<div id="app">
+  <div id="topbar">
+    <h1>Zine Page Builder</h1>
+    <button id="menuBtn">☰ Menu</button>
+  </div>
+
+  <div id="canvasWrap">
+    <div class="page stock-white" id="page"></div>
+  </div>
+
+  <div id="selectionBar" hidden>
+    <div class="selbar" id="selbar"></div>
+    <div class="selrow" id="selrow"></div>
+  </div>
+</div>
+
+<div id="backdrop"></div>
+<div id="drawer">
+  <div class="drawerHead">
+    <strong>Menu</strong>
+    <button id="drawerClose">Close</button>
+  </div>
+  <div class="drawerBody">
+    <p class="drawerHint">Drag a piece's body to move it, the red dot to resize, the green dot above it to rotate. Tap a selected text-bearing piece again to type.</p>
+
+    <section>
+      <h2>Add a shape</h2>
+      <div class="toolbar">
+        <button data-add="text">+ Text scrap</button>
+        <button data-add="photo">+ Image</button>
+        <button data-add="rect">+ Headline bar</button>
+        <button data-add="burst">+ Burst</button>
+        <button data-add="bubble">+ Speech bubble</button>
+        <button data-add="circle">+ Circle badge</button>
+        <button data-add="arrow">+ Arrow banner</button>
+        <button data-add="ticket">+ Ticket stub</button>
+        <button data-add="stamp">+ Stamp</button>
+        <button data-add="outline">+ Outlined note</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Page settings</h2>
+      <div class="ctl">
+        <span class="lbl">Paper</span>
+        <button class="swatch" data-stock="white" style="background:#f3efe2" aria-pressed="true" aria-label="White"></button>
+        <button class="swatch" data-stock="pink" style="background:#f1dde0" aria-pressed="false" aria-label="Pink"></button>
+        <button class="swatch" data-stock="green" style="background:#dde7d6" aria-pressed="false" aria-label="Green"></button>
+        <button class="swatch" data-stock="yellow" style="background:#f2eac4" aria-pressed="false" aria-label="Yellow"></button>
+      </div>
+      <div class="ctl">
+        <button id="cleanToggle" aria-pressed="false">Show clean (no copier)</button>
+      </div>
+      <label class="row">Harshness
+        <input type="range" id="harsh" min="0" max="100" value="22">
+        <span id="harshVal">22</span>
+      </label>
+    </section>
+
+    <section>
+      <h2>Layers, front to back</h2>
+      <div id="layerList"></div>
+    </section>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var page = document.getElementById("page");
+  var canvasWrap = document.getElementById("canvasWrap");
+  var selectionBar = document.getElementById("selectionBar");
+  var selbar = document.getElementById("selbar");
+  var selrow = document.getElementById("selrow");
+  var layerList = document.getElementById("layerList");
+  var drawer = document.getElementById("drawer");
+  var backdrop = document.getElementById("backdrop");
+  var els = []; // {id,type,x,y,w,h,rot,content,filtered,font,size,inverted}
+  var domMap = {}; // id -> div
+  var zTop = 1;
+  var selectedId = null;
+  var globalClean = false;
+
+  function uid(){ return Math.random().toString(36).slice(2,9); }
+  function byId(id){ return els.find(function(x){ return x.id===id; }); }
+  function rnd(min,max){ return min + Math.random()*(max-min); }
+
+  // --- drawer open/close ---
+  function openDrawer(){ drawer.classList.add("open"); backdrop.classList.add("open"); }
+  function closeDrawer(){ drawer.classList.remove("open"); backdrop.classList.remove("open"); }
+  document.getElementById("menuBtn").addEventListener("click", openDrawer);
+  document.getElementById("drawerClose").addEventListener("click", closeDrawer);
+  backdrop.addEventListener("click", closeDrawer);
+
+  // --- canvas sizing: measure the real space available and fit the portrait page into it (object-fit: contain) ---
+  function fitPage(){
+    var r = canvasWrap.getBoundingClientRect();
+    var pad = 10;
+    var availW = Math.max(80, r.width - pad*2);
+    var availH = Math.max(80, r.height - pad*2);
+    var ratio = 210/297;
+    var w = availW, h = w/ratio;
+    if(h > availH){ h = availH; w = h*ratio; }
+    page.style.width = w+"px";
+    page.style.height = h+"px";
+  }
+  window.addEventListener("resize", fitPage);
+  window.addEventListener("orientationchange", function(){ setTimeout(fitPage,60); });
+
+  // --- fonts: the six from the fanzine's own font palette ---
+  var FONTS = {
+    newspaper: { label:"Newspaper", css:'"Old Standard TT",Georgia,serif' },
+    typewriter:{ label:"Typewriter", css:'"Special Elite","Courier New",monospace' },
+    courier:   { label:"Courier", css:'"Courier Prime","Courier New",monospace' },
+    marker:    { label:"Marker", css:'"Permanent Marker",cursive' },
+    hand:      { label:"Handwritten", css:'"Rock Salt",cursive' },
+    anton:     { label:"Headline (Anton)", css:'Anton,Impact,sans-serif' }
+  };
+  var SIZES = { S:0.75, M:1, L:1.4 };
+
+  function starPolygon(spikes, outerR, innerR){
+    var pts = [];
+    for(var i=0;i<spikes*2;i++){
+      var ang = (Math.PI/spikes)*i - Math.PI/2;
+      var r = (i%2===0) ? outerR : innerR;
+      var x = 50 + r*Math.cos(ang), y = 50 + r*Math.sin(ang);
+      pts.push(x.toFixed(1)+"% "+y.toFixed(1)+"%");
+    }
+    return "polygon(" + pts.join(",") + ")";
+  }
+
+  // jagged "torn paper" edges for text scraps -- one is chosen at random and locked per element,
+  // same idea as the static prototype's c1/c2/c3 clipping variants
+  var TEXT_CLIPS = [
+    "polygon(0% 2%,18% 0%,45% 1%,72% 0%,100% 2%,99% 35%,100% 70%,98% 100%,60% 99%,30% 100%,0% 98%,1% 60%)",
+    "polygon(1% 0%,35% 2%,70% 0%,100% 1%,99% 50%,100% 99%,64% 100%,30% 98%,0% 100%,2% 45%)",
+    "polygon(0% 0%,52% 2%,100% 0%,99% 55%,100% 100%,48% 98%,1% 100%,2% 52%)"
+  ];
+
+  // --- shapes: each type's own clip-path / border treatment / defaults / tilt range ---
+  var SHAPES = {
+    text:    { clip:"random-torn", font:"newspaper", bg:"#e9e3cf", fg:"#201e1a", baseVw:3.6, content:"New text — tap again to edit", align:"left", tilt:2.2 },
+    rect:    { clip:"polygon(0% 4%,100% 0%,97% 100%,2% 95%)", font:"anton", bg:"#171510", fg:"#f1ede1", baseVw:5.2, content:"HEADLINE", align:"center", tilt:1.6 },
+    burst:   { clip:starPolygon(9,50,23), font:"anton", bg:"#171510", fg:"#f1ede1", baseVw:4.2, content:"NEW!", align:"center", tilt:5 },
+    bubble:  { clip:"polygon(0% 0%,100% 0%,100% 78%,34% 78%,18% 100%,24% 78%,0% 78%)", font:"courier", bg:"#f6f3e8", fg:"#201e1a", baseVw:3.4, content:"Say something...", align:"left", tilt:2.5 },
+    circle:  { round:true, font:"anton", bg:"#171510", fg:"#f1ede1", baseVw:4, content:"5/5", align:"center", tilt:4 },
+    arrow:   { clip:"polygon(0% 0%,88% 0%,100% 50%,88% 100%,0% 100%,6% 50%)", font:"anton", bg:"#171510", fg:"#f1ede1", baseVw:3.8, content:"READ MORE", align:"center", tilt:1.5 },
+    ticket:  { clip:"polygon(0% 0%,100% 0%,100% 35%,94% 50%,100% 65%,100% 100%,0% 100%,0% 65%,6% 50%,0% 35%)", font:"typewriter", bg:"#f7f5ee", fg:"#171510", baseVw:3, content:"ADMIT ONE — ONE NIGHT ONLY", align:"left", tilt:3 },
+    stamp:   { border:"double", font:"anton", bg:"#f7f5ee", fg:"#171510", baseVw:4.5, content:"A+", align:"center", tilt:4.5 },
+    outline: { border:"single", font:"typewriter", bg:"#f7f5ee", fg:"#171510", baseVw:3.2, content:"outlined note", align:"left", tilt:1.8 }
+  };
+
+  function addEl(type, opts){
+    var shape = SHAPES[type];
+    var tilt = type==="photo" ? 1.5 : (shape ? shape.tilt : 2);
+    var e = Object.assign({
+      id: uid(), type: type,
+      x: 15, y: 10, w: 60, h: type==="photo" ? 32 : (type==="burst"||type==="circle" ? 26 : 16),
+      rot: rnd(-tilt, tilt),
+      textClip: type==="text" ? TEXT_CLIPS[Math.floor(Math.random()*TEXT_CLIPS.length)] : null,
+      content: type==="photo" ? null : (shape && shape.content),
+      filtered: true,
+      font: shape ? shape.font : null,
+      size: "M",
+      inverted: false,
+      z: ++zTop
+    }, opts||{});
+    els.push(e);
+    createDiv(e);
+    selectEl(e.id);
+    if(type!=="photo"){ enterEdit(e.id); }
+    renderSelbar();
+    renderLayers();
+    return e;
+  }
+
+  // --- build a persistent DOM node for an element (created once, updated in place forever after) ---
+  function createDiv(e){
+    var div = document.createElement("div");
+    div.className = "el " + e.type;
+    div.setAttribute("data-id", e.id);
+
+    if(e.type === "photo"){
+      var img = document.createElement("img");
+      img.style.display = "none";
+      var add = document.createElement("span");
+      add.className = "add";
+      add.textContent = "+ tap to add a photo";
+      div.appendChild(img);
+      div.appendChild(add);
+    }
+    var rotHandle = document.createElement("div");
+    rotHandle.className = "handle rotate";
+    rotHandle.title = "Rotate";
+    rotHandle.textContent = "↻";
+    var resizeHandle = document.createElement("div");
+    resizeHandle.className = "handle resize";
+    resizeHandle.title = "Resize";
+    div.appendChild(rotHandle);
+    div.appendChild(resizeHandle);
+
+    div.addEventListener("pointerdown", function(ev){ onElPointerDown(ev, e.id); });
+    div.addEventListener("click", function(){ onElClick(e.id); });
+    resizeHandle.addEventListener("pointerdown", function(ev){ ev.stopPropagation(); onResizePointerDown(ev, e.id); });
+    rotHandle.addEventListener("pointerdown", function(ev){ ev.stopPropagation(); onRotatePointerDown(ev, e.id); });
+
+    page.appendChild(div);
+    domMap[e.id] = div;
+    updateDiv(e);
+  }
+
+  // update an existing node's position/size/rotation/content/style/selection -- never recreates it
+  function updateDiv(e){
+    var div = domMap[e.id];
+    if(!div) return;
+    div.style.left = e.x+"%"; div.style.top = e.y+"%";
+    div.style.width = e.w+"%"; div.style.height = e.h+"%";
+    div.style.zIndex = e.z;
+    div.style.transform = "rotate("+e.rot.toFixed(1)+"deg)";
+    div.classList.toggle("selected", e.id===selectedId);
+
+    var dropShadow = "drop-shadow(1px 1.5px 1px rgba(0,0,0,.4))";
+    div.style.filter = (e.filtered && !globalClean ? "url(#copier) " : "") + dropShadow;
+
+    var shape = SHAPES[e.type];
+    if(e.type === "photo"){
+      var img = div.querySelector("img");
+      var add = div.querySelector(".add");
+      if(e.content){
+        img.src = e.content; img.style.display = "block"; add.style.display = "none";
+        div.style.background = "transparent";
+      } else {
+        img.style.display = "none"; add.style.display = "flex";
+        div.style.background = "#d8d2bd";
+      }
+      return;
+    }
+
+    // text-bearing shapes
+    var clip = shape.clip === "random-torn" ? e.textClip : (shape.clip || "none");
+    div.style.clipPath = clip;
+    div.style.borderRadius = shape.round ? "50%" : "0";
+    if(shape.border === "double"){ div.style.border = "3px solid "+(e.inverted?shape.bg:shape.fg); div.style.outline = "1px solid "+(e.inverted?shape.bg:shape.fg); div.style.outlineOffset = "3px"; }
+    else if(shape.border === "single"){ div.style.border = "2.5px solid "+(e.inverted?shape.bg:shape.fg); div.style.outline = "none"; }
+    else { div.style.border = "none"; div.style.outline = "none"; }
+
+    div.style.textAlign = shape.align;
+    div.style.justifyContent = shape.align === "left" ? "flex-start" : "center";
+    var bg = e.inverted ? shape.fg : shape.bg;
+    var fg = e.inverted ? shape.bg : shape.fg;
+    div.style.background = bg;
+    div.style.color = fg;
+    div.style.fontFamily = (FONTS[e.font] || FONTS[shape.font]).css;
+    div.style.fontSize = (shape.baseVw * (SIZES[e.size]||1)).toFixed(2) + "vw";
+    if(div.getAttribute("contenteditable") !== "true"){
+      var rotHandle = div.querySelector(".handle.rotate");
+      var resizeHandle = div.querySelector(".handle.resize");
+      div.textContent = e.content;
+      div.appendChild(rotHandle);
+      div.appendChild(resizeHandle);
+    }
+  }
+
+  function refreshAllFilters(){ els.forEach(updateDiv); }
+
+  function reorderDom(){
+    els.slice().sort(function(a,b){return a.z-b.z;}).forEach(function(e){
+      page.appendChild(domMap[e.id]);
+    });
+  }
+
+  function selectEl(id){
+    var prev = selectedId;
+    selectedId = id;
+    if(prev && domMap[prev]) domMap[prev].classList.remove("selected");
+    if(id && domMap[id]) domMap[id].classList.add("selected");
+    selectionBar.hidden = !id;
+    renderSelbar();
+    renderLayers();
+    requestAnimationFrame(fitPage); // the selection bar taking/releasing space changes how much room the canvas has
+  }
+
+  function bringToFront(id){
+    var e = byId(id);
+    if(!e) return;
+    e.z = ++zTop;
+    var div = domMap[id];
+    if(div) div.style.zIndex = e.z;
+    reorderDom();
+    renderLayers();
+  }
+  function sendToBack(id){
+    var e = byId(id);
+    if(!e) return;
+    var minZ = Math.min.apply(null, els.map(function(x){return x.z;}));
+    e.z = minZ - 1;
+    var div = domMap[id];
+    if(div) div.style.zIndex = e.z;
+    reorderDom();
+    renderLayers();
+  }
+
+  function labelFor(e){
+    var typeName = { text:"Text", photo:"Photo", rect:"Bar", burst:"Burst", bubble:"Bubble", circle:"Circle", arrow:"Arrow", ticket:"Ticket", stamp:"Stamp", outline:"Note" }[e.type];
+    var detail = e.type==="photo" ? (e.content?"has image":"empty") : (e.content||"").slice(0,16);
+    return typeName+": "+detail+(e.filtered?"":" — clean");
+  }
+
+  function renderLayers(){
+    layerList.innerHTML = "";
+    if(els.length === 0){
+      layerList.innerHTML = '<div class="empty-layers">Nothing on the page yet.</div>';
+      return;
+    }
+    els.slice().sort(function(a,b){return b.z-a.z;}).forEach(function(e){
+      var row = document.createElement("div");
+      row.className = "layerrow" + (e.id===selectedId ? " active" : "");
+      var nameBtn = document.createElement("button");
+      nameBtn.className = "name";
+      nameBtn.textContent = labelFor(e);
+      nameBtn.addEventListener("click", function(){ selectEl(e.id); closeDrawer(); });
+      row.appendChild(nameBtn);
+
+      var frontBtn = document.createElement("button");
+      frontBtn.className = "mini"; frontBtn.title = "Bring to front"; frontBtn.textContent = "↑";
+      frontBtn.addEventListener("click", function(){ bringToFront(e.id); });
+      row.appendChild(frontBtn);
+
+      var backBtn = document.createElement("button");
+      backBtn.className = "mini"; backBtn.title = "Send to back"; backBtn.textContent = "↓";
+      backBtn.addEventListener("click", function(){ sendToBack(e.id); });
+      row.appendChild(backBtn);
+
+      layerList.appendChild(row);
+    });
+  }
+
+  function renderSelbar(){
+    selbar.innerHTML = "";
+    selrow.innerHTML = "";
+    var e = byId(selectedId);
+    if(!e) return;
+    var isText = e.type !== "photo";
+
+    if(isText){
+      var editBtn = document.createElement("button");
+      editBtn.textContent = "Edit text";
+      editBtn.addEventListener("click", function(){ enterEdit(e.id); });
+      selbar.appendChild(editBtn);
+    } else {
+      var replaceBtn = document.createElement("button");
+      replaceBtn.textContent = e.content ? "Replace photo" : "Add photo";
+      replaceBtn.addEventListener("click", function(){ pickPhoto(e.id); });
+      selbar.appendChild(replaceBtn);
+    }
+
+    var fillBtn = document.createElement("button");
+    fillBtn.textContent = "Fill page";
+    fillBtn.addEventListener("click", function(){ e.x=0; e.y=0; e.w=100; e.h=100; e.rot=0; updateDiv(e); });
+    selbar.appendChild(fillBtn);
+
+    var filterBtn = document.createElement("button");
+    filterBtn.textContent = e.filtered ? "Keep this one clean" : "Photocopy this one";
+    filterBtn.addEventListener("click", function(){ e.filtered = !e.filtered; updateDiv(e); renderSelbar(); });
+    selbar.appendChild(filterBtn);
+
+    var rerollBtn = document.createElement("button");
+    rerollBtn.textContent = "Reroll tilt";
+    rerollBtn.addEventListener("click", function(){
+      var shape = SHAPES[e.type];
+      var tilt = e.type==="photo" ? 1.5 : (shape ? shape.tilt : 2);
+      e.rot = rnd(-tilt, tilt);
+      if(e.type==="text"){ e.textClip = TEXT_CLIPS[Math.floor(Math.random()*TEXT_CLIPS.length)]; }
+      updateDiv(e);
+    });
+    selbar.appendChild(rerollBtn);
+
+    var delBtn = document.createElement("button");
+    delBtn.className = "danger";
+    delBtn.textContent = "Delete";
+    delBtn.addEventListener("click", function(){
+      var div = domMap[e.id];
+      if(div) div.remove();
+      delete domMap[e.id];
+      els = els.filter(function(x){ return x.id!==e.id; });
+      selectEl(null);
+      renderLayers();
+    });
+    selbar.appendChild(delBtn);
+
+    if(isText){
+      var invertBtn = document.createElement("button");
+      invertBtn.textContent = "Invert colours";
+      invertBtn.setAttribute("aria-pressed", String(e.inverted));
+      invertBtn.addEventListener("click", function(){ e.inverted = !e.inverted; updateDiv(e); renderSelbar(); });
+      selrow.appendChild(invertBtn);
+
+      ["S","M","L"].forEach(function(s){
+        var b = document.createElement("button");
+        b.textContent = s;
+        b.setAttribute("aria-pressed", String(e.size===s));
+        b.addEventListener("click", function(){ e.size = s; updateDiv(e); renderSelbar(); });
+        selrow.appendChild(b);
+      });
+
+      var sel = document.createElement("select");
+      Object.keys(FONTS).forEach(function(key){
+        var opt = document.createElement("option");
+        opt.value = key; opt.textContent = FONTS[key].label;
+        if(e.font===key) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      sel.addEventListener("change", function(){ e.font = sel.value; updateDiv(e); });
+      selrow.appendChild(sel);
+    }
+  }
+
+  function enterEdit(id){
+    selectEl(id);
+    var div = domMap[id];
+    if(!div) return;
+    div.setAttribute("contenteditable","true");
+    div.focus();
+    var range = document.createRange();
+    range.selectNodeContents(div);
+    range.collapse(false);
+    var sel = window.getSelection();
+    sel.removeAllRanges(); sel.addRange(range);
+
+    function onInput(){
+      var e = byId(id);
+      if(e) e.content = div.textContent;
+      renderLayers();
+    }
+    function onBlur(){
+      div.removeAttribute("contenteditable");
+      var rotHandle = div.querySelector(".handle.rotate");
+      var resizeHandle = div.querySelector(".handle.resize");
+      if(rotHandle) div.appendChild(rotHandle);
+      if(resizeHandle) div.appendChild(resizeHandle);
+      div.removeEventListener("input", onInput);
+      div.removeEventListener("blur", onBlur);
+    }
+    div.addEventListener("input", onInput);
+    div.addEventListener("blur", onBlur);
+  }
+
+  function pickPhoto(id){
+    var input = document.createElement("input");
+    input.type = "file"; input.accept = "image/*";
+    input.addEventListener("change", function(){
+      var file = input.files && input.files[0];
+      if(!file) return;
+      var reader = new FileReader();
+      reader.onload = function(){
+        var e = byId(id);
+        if(e){ e.content = reader.result; updateDiv(e); renderLayers(); }
+      };
+      reader.readAsDataURL(file);
+    });
+    input.click();
+  }
+
+  // --- interaction state ---
+  var gesture = null;
+
+  function onElPointerDown(ev, id){
+    var div = domMap[id];
+    if(!div || div.getAttribute("contenteditable")==="true") return;
+    if(ev.target.classList.contains("handle")) return;
+
+    var wasSelected = (selectedId === id);
+    selectEl(id);
+
+    var e = byId(id);
+    var rect = page.getBoundingClientRect();
+    var startX = ev.clientX, startY = ev.clientY;
+    var startXPct = e.x, startYPct = e.y;
+    var moved = false;
+    div.classList.add("dragging");
+    try { div.setPointerCapture(ev.pointerId); } catch(err){}
+
+    function move(mv){
+      var dxPct = (mv.clientX-startX)/rect.width*100;
+      var dyPct = (mv.clientY-startY)/rect.height*100;
+      if(Math.abs(dxPct)>0.3 || Math.abs(dyPct)>0.3) moved = true;
+      e.x = Math.min(100-e.w, Math.max(0, startXPct+dxPct));
+      e.y = Math.min(100-e.h, Math.max(0, startYPct+dyPct));
+      div.style.left = e.x+"%"; div.style.top = e.y+"%";
+    }
+    function up(){
+      div.classList.remove("dragging");
+      div.removeEventListener("pointermove", move);
+      div.removeEventListener("pointerup", up);
+      div.removeEventListener("pointercancel", up);
+      gesture = { id:id, moved: moved, wasSelected: wasSelected };
+    }
+    div.addEventListener("pointermove", move);
+    div.addEventListener("pointerup", up);
+    div.addEventListener("pointercancel", up);
+  }
+
+  function onElClick(id){
+    var g = gesture;
+    gesture = null;
+    var e = byId(id);
+    if(!e || e.type === "photo") return;
+    if(g && g.id===id && !g.moved && g.wasSelected){
+      enterEdit(id);
+    }
+  }
+
+  function onResizePointerDown(ev, id){
+    var div = domMap[id];
+    var e = byId(id);
+    if(!div || !e) return;
+    var rect = page.getBoundingClientRect();
+    var startX = ev.clientX, startY = ev.clientY;
+    var startW = e.w, startH = e.h;
+    try { div.setPointerCapture(ev.pointerId); } catch(err){}
+
+    function move(mv){
+      var dwPct = (mv.clientX-startX)/rect.width*100;
+      var dhPct = (mv.clientY-startY)/rect.height*100;
+      e.w = Math.min(100-e.x, Math.max(8, startW+dwPct));
+      e.h = Math.min(100-e.y, Math.max(6, startH+dhPct));
+      div.style.width = e.w+"%"; div.style.height = e.h+"%";
+    }
+    function up(){
+      div.removeEventListener("pointermove", move);
+      div.removeEventListener("pointerup", up);
+      div.removeEventListener("pointercancel", up);
+    }
+    div.addEventListener("pointermove", move);
+    div.addEventListener("pointerup", up);
+    div.addEventListener("pointercancel", up);
+  }
+
+  // rotate: angle is measured from the element's screen-space centre to the pointer,
+  // independent of the element's current rotation, so it tracks the pointer naturally
+  function onRotatePointerDown(ev, id){
+    var div = domMap[id];
+    var e = byId(id);
+    if(!div || !e) return;
+    var pageRect = page.getBoundingClientRect();
+    try { div.setPointerCapture(ev.pointerId); } catch(err){}
+
+    function move(mv){
+      var centerX = pageRect.left + (e.x + e.w/2)/100*pageRect.width;
+      var centerY = pageRect.top + (e.y + e.h/2)/100*pageRect.height;
+      var angle = Math.atan2(mv.clientY-centerY, mv.clientX-centerX) * 180/Math.PI + 90;
+      if(angle > 180) angle -= 360;
+      if(angle < -180) angle += 360;
+      e.rot = angle;
+      div.style.transform = "rotate("+e.rot.toFixed(1)+"deg)";
+    }
+    function up(){
+      div.removeEventListener("pointermove", move);
+      div.removeEventListener("pointerup", up);
+      div.removeEventListener("pointercancel", up);
+    }
+    div.addEventListener("pointermove", move);
+    div.addEventListener("pointerup", up);
+    div.addEventListener("pointercancel", up);
+  }
+
+  page.addEventListener("pointerdown", function(ev){
+    if(ev.target === page) selectEl(null);
+  });
+
+  var ADD_DEFAULTS = {
+    text:    { x:15, y:10, w:60, h:16 },
+    photo:   { x:15, y:10, w:65, h:30 },
+    rect:    { x:10, y:10, w:80, h:12 },
+    burst:   { x:30, y:10, w:38, h:26 },
+    bubble:  { x:15, y:10, w:65, h:20 },
+    circle:  { x:35, y:10, w:28, h:26 },
+    arrow:   { x:12, y:10, w:70, h:12 },
+    ticket:  { x:12, y:10, w:76, h:14 },
+    stamp:   { x:30, y:10, w:34, h:20 },
+    outline: { x:12, y:10, w:76, h:18 }
+  };
+  document.querySelectorAll(".toolbar button[data-add]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var type = btn.getAttribute("data-add");
+      var e = addEl(type, Object.assign({}, ADD_DEFAULTS[type]));
+      if(type === "photo"){ pickPhoto(e.id); }
+      closeDrawer(); // land back on the canvas with the new piece ready to position
+    });
+  });
+
+  document.querySelectorAll(".swatch").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      document.querySelectorAll(".swatch").forEach(function(b){ b.setAttribute("aria-pressed", String(b===btn)); });
+      page.className = "page stock-" + btn.getAttribute("data-stock");
+    });
+  });
+
+  var cleanToggle = document.getElementById("cleanToggle");
+  cleanToggle.addEventListener("click", function(){
+    globalClean = cleanToggle.getAttribute("aria-pressed") !== "true";
+    cleanToggle.setAttribute("aria-pressed", String(globalClean));
+    cleanToggle.textContent = globalClean ? "Show photocopied" : "Show clean (no copier)";
+    refreshAllFilters();
+  });
+
+  var harsh = document.getElementById("harsh");
+  var harshVal = document.getElementById("harshVal");
+  function applyHarshness(v){
+    var h = v/100;
+    document.getElementById("fBlur").setAttribute("stdDeviation", (0.12 + h*1.1).toFixed(2));
+    document.getElementById("fComp").setAttribute("k3", (0.06 + h*0.6).toFixed(2));
+    document.getElementById("fComp").setAttribute("k4", (-0.03 - h*0.22).toFixed(2));
+    var xfer = document.getElementById("fXfer");
+    xfer.querySelectorAll("feFuncR,feFuncG,feFuncB").forEach(function(f){
+      f.setAttribute("slope", (1.05 + h*0.75).toFixed(2));
+      f.setAttribute("intercept", (-0.04 - h*0.4).toFixed(2));
+    });
+    document.getElementById("tR").setAttribute("tableValues", (0.15 - h*0.2).toFixed(2) + " " + (1 - h*0.12).toFixed(2));
+    document.getElementById("tG").setAttribute("tableValues", (0.15 - h*0.2).toFixed(2) + " " + (1 - h*0.16).toFixed(2));
+    document.getElementById("tB").setAttribute("tableValues", (0.17 - h*0.22).toFixed(2) + " " + (1 - h*0.26).toFixed(2));
+  }
+  harsh.addEventListener("input", function(){
+    harshVal.textContent = harsh.value;
+    applyHarshness(parseInt(harsh.value,10));
+  });
+  applyHarshness(parseInt(harsh.value,10));
+
+  // starter content so the page isn't empty on load
+  addEl("rect", { x:10, y:4, w:80, h:11, content:"SCUFF — ISSUE ONE" });
+  addEl("photo", { x:12, y:19, w:76, h:32 });
+  addEl("burst", { x:62, y:14, w:30, h:22, content:"FREE PATCH!" });
+  addEl("stamp", { x:8, y:16, w:18, h:16, content:"A+" });
+  addEl("text", { x:14, y:55, w:72, h:13, content:"front row, somebody's basement, March" });
+  addEl("bubble", { x:10, y:71, w:62, h:14, content:"drag, resize, rotate, change my font" });
+  addEl("ticket", { x:58, y:84, w:36, h:11, content:"ADMIT ONE" });
+  selectEl(null);
+  renderLayers();
+  fitPage();
+})();
+</script>
