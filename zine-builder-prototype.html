@@ -36,6 +36,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"
 
 #canvasWrap{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;padding:12px 0;position:relative}
 .page{position:relative;background:#f3efe2;aspect-ratio:210/297;overflow:hidden;touch-action:none;transition:background .25s;box-shadow:0 2px 10px rgba(0,0,0,.25);container-type:inline-size;container-name:page}
+.page:empty::after{content:"Blank page — tap ☰ Menu to add your first piece";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:14%;color:#9a9381;font-size:14px;line-height:1.5;pointer-events:none}
 .page.stock-pink{background:#f1dde0}
 .page.stock-green{background:#dde7d6}
 .page.stock-yellow{background:#f2eac4}
@@ -871,14 +872,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"
     });
   });
 
-  // starter content so the page isn't empty on load
-  addEl("rect", { x:10, y:4, w:80, h:11, content:"SCUFF — ISSUE ONE" });
-  addEl("photo", { x:12, y:19, w:76, h:32 });
-  addEl("burst", { x:62, y:14, w:30, h:22, content:"FREE PATCH!" });
-  addEl("stamp", { x:8, y:16, w:18, h:16, content:"A+" });
-  addEl("text", { x:14, y:55, w:72, h:13, content:"front row, somebody's basement, March" });
-  addEl("bubble", { x:10, y:71, w:62, h:14, content:"drag, resize, rotate, change my font" });
-  addEl("ticket", { x:58, y:84, w:36, h:11, content:"ADMIT ONE" });
+  // page loads blank, ready for a fresh piece -- no starter content
   selectEl(null);
   renderLayers();
   fitPage();
