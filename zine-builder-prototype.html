@@ -1,3 +1,8 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Zine Page Builder</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Old+Standard+TT:ital,wght@0,400;0,700;1,400&family=Permanent+Marker&family=Anton&family=Rock+Salt&family=Courier+Prime:wght@400;700&display=swap">
 <style>
@@ -16,17 +21,17 @@
 :root[data-theme="dark"]{ --bg:#17160f; --fg:#eee9dc; --mut:#aaa38f; --line:#eee9dc; --card:#221f17; color-scheme:dark; }
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{height:100%}
+html,body{height:100vh;height:100dvh}
 body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Special Elite","Courier New",monospace;overflow:hidden;display:flex;justify-content:center}
 
 #app{width:100%;max-width:480px;height:100%;display:flex;flex-direction:column;padding-inline:14px;min-width:0}
 
-#topbar{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;padding-block:10px 8px;border-bottom:1.5px solid var(--line)}
+#topbar{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;padding-block:calc(10px + env(safe-area-inset-top,0px)) 8px;border-bottom:1.5px solid var(--line)}
 #topbar h1{font:400 21px/1 "Permanent Marker",cursive;margin:0}
 #menuBtn{font:700 12px "Courier Prime",monospace;background:var(--card);border:1.5px solid var(--line);color:var(--fg);padding:8px 12px;cursor:pointer;white-space:nowrap}
 
 #canvasWrap{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;padding:12px 0;position:relative}
-.page{position:relative;background:#f3efe2;aspect-ratio:210/297;overflow:hidden;touch-action:none;transition:background .25s;box-shadow:0 2px 10px rgba(0,0,0,.25)}
+.page{position:relative;background:#f3efe2;aspect-ratio:210/297;overflow:hidden;touch-action:none;transition:background .25s;box-shadow:0 2px 10px rgba(0,0,0,.25);container-type:inline-size;container-name:page}
 .page.stock-pink{background:#f1dde0}
 .page.stock-green{background:#dde7d6}
 .page.stock-yellow{background:#f2eac4}
@@ -49,11 +54,11 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Special Elite"
 .el[contenteditable="true"]{cursor:text;outline:1.5px dashed var(--accent);outline-offset:1px}
 .el.photo{overflow:hidden;padding:0}
 .el.photo img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
-.el.photo .add{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:700 2.6vw "Courier Prime",monospace;color:#6b6659;text-align:center;pointer-events:none}
+.el.photo .add{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:700 2.6cqw "Courier Prime",monospace;color:#6b6659;text-align:center;pointer-events:none}
 .el.selected{outline:1.5px solid var(--accent);outline-offset:1px}
-.handle{position:absolute;width:16px;height:16px;border:2px solid var(--bg);border-radius:50%;cursor:nwse-resize;display:none;font-size:9px;align-items:center;justify-content:center;color:#fff;line-height:1}
-.handle.resize{right:-7px;bottom:-7px;background:var(--accent)}
-.handle.rotate{left:50%;top:-24px;transform:translateX(-50%);background:#2e6b4f;cursor:grab}
+.handle{position:absolute;width:28px;height:28px;border:2px solid var(--bg);border-radius:50%;cursor:nwse-resize;display:none;font-size:13px;align-items:center;justify-content:center;color:#fff;line-height:1;touch-action:none;z-index:5}
+.handle.resize{right:-13px;bottom:-13px;background:var(--accent)}
+.handle.rotate{left:50%;top:-36px;transform:translateX(-50%);background:#2e6b4f;cursor:grab}
 .el.selected .handle{display:flex}
 
 /* drawer */
@@ -92,6 +97,8 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Special Elite"
 .layerrow button.mini{font-size:14px;background:none;border:1px solid var(--line);color:var(--fg);width:26px;height:26px;cursor:pointer;line-height:1}
 .empty-layers{font-size:12px;color:var(--mut)}
 </style>
+</head>
+<body>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <filter id="copier" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
@@ -253,25 +260,26 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Special Elite"
   ];
 
   // --- shapes: each type's own clip-path / border treatment / defaults / tilt range ---
+  // baseCq is in cqw (% of the PAGE's own width, not the viewport) so text stays correctly
+  // sized to the page however big or small it's actually rendered on screen
   var SHAPES = {
-    text:    { clip:"random-torn", font:"newspaper", bg:"#e9e3cf", fg:"#201e1a", baseVw:3.6, content:"New text — tap again to edit", align:"left", tilt:2.2 },
-    rect:    { clip:"polygon(0% 4%,100% 0%,97% 100%,2% 95%)", font:"anton", bg:"#171510", fg:"#f1ede1", baseVw:5.2, content:"HEADLINE", align:"center", tilt:1.6 },
-    burst:   { clip:starPolygon(9,50,23), font:"anton", bg:"#171510", fg:"#f1ede1", baseVw:4.2, content:"NEW!", align:"center", tilt:5 },
-    bubble:  { clip:"polygon(0% 0%,100% 0%,100% 78%,34% 78%,18% 100%,24% 78%,0% 78%)", font:"courier", bg:"#f6f3e8", fg:"#201e1a", baseVw:3.4, content:"Say something...", align:"left", tilt:2.5 },
-    circle:  { round:true, font:"anton", bg:"#171510", fg:"#f1ede1", baseVw:4, content:"5/5", align:"center", tilt:4 },
-    arrow:   { clip:"polygon(0% 0%,88% 0%,100% 50%,88% 100%,0% 100%,6% 50%)", font:"anton", bg:"#171510", fg:"#f1ede1", baseVw:3.8, content:"READ MORE", align:"center", tilt:1.5 },
-    ticket:  { clip:"polygon(0% 0%,100% 0%,100% 35%,94% 50%,100% 65%,100% 100%,0% 100%,0% 65%,6% 50%,0% 35%)", font:"typewriter", bg:"#f7f5ee", fg:"#171510", baseVw:3, content:"ADMIT ONE — ONE NIGHT ONLY", align:"left", tilt:3 },
-    stamp:   { border:"double", font:"anton", bg:"#f7f5ee", fg:"#171510", baseVw:4.5, content:"A+", align:"center", tilt:4.5 },
-    outline: { border:"single", font:"typewriter", bg:"#f7f5ee", fg:"#171510", baseVw:3.2, content:"outlined note", align:"left", tilt:1.8 }
+    text:    { clip:"random-torn", font:"newspaper", bg:"#e9e3cf", fg:"#201e1a", baseCq:2.8, content:"New text — tap again to edit", align:"left", tilt:2.2 },
+    rect:    { clip:"polygon(0% 4%,100% 0%,97% 100%,2% 95%)", font:"anton", bg:"#171510", fg:"#f1ede1", baseCq:4.2, content:"HEADLINE", align:"center", tilt:1.6 },
+    burst:   { clip:starPolygon(9,50,23), font:"anton", bg:"#171510", fg:"#f1ede1", baseCq:3.4, content:"NEW!", align:"center", tilt:5 },
+    bubble:  { clip:"polygon(0% 0%,100% 0%,100% 78%,34% 78%,18% 100%,24% 78%,0% 78%)", font:"courier", bg:"#f6f3e8", fg:"#201e1a", baseCq:2.7, content:"Say something...", align:"left", tilt:2.5 },
+    circle:  { round:true, font:"anton", bg:"#171510", fg:"#f1ede1", baseCq:3.2, content:"5/5", align:"center", tilt:4 },
+    arrow:   { clip:"polygon(0% 0%,88% 0%,100% 50%,88% 100%,0% 100%,6% 50%)", font:"anton", bg:"#171510", fg:"#f1ede1", baseCq:3, content:"READ MORE", align:"center", tilt:1.5 },
+    ticket:  { clip:"polygon(0% 0%,100% 0%,100% 35%,94% 50%,100% 65%,100% 100%,0% 100%,0% 65%,6% 50%,0% 35%)", font:"typewriter", bg:"#f7f5ee", fg:"#171510", baseCq:2.4, content:"ADMIT ONE — ONE NIGHT ONLY", align:"left", tilt:3 },
+    stamp:   { border:"double", font:"anton", bg:"#f7f5ee", fg:"#171510", baseCq:3.6, content:"A+", align:"center", tilt:4.5 },
+    outline: { border:"single", font:"typewriter", bg:"#f7f5ee", fg:"#171510", baseCq:2.6, content:"outlined note", align:"left", tilt:1.8 }
   };
 
   function addEl(type, opts){
     var shape = SHAPES[type];
-    var tilt = type==="photo" ? 1.5 : (shape ? shape.tilt : 2);
     var e = Object.assign({
       id: uid(), type: type,
       x: 15, y: 10, w: 60, h: type==="photo" ? 32 : (type==="burst"||type==="circle" ? 26 : 16),
-      rot: rnd(-tilt, tilt),
+      rot: 0, // pieces land flat/normal; tilt is opt-in via the selection bar's "Tilt" button
       textClip: type==="text" ? TEXT_CLIPS[Math.floor(Math.random()*TEXT_CLIPS.length)] : null,
       content: type==="photo" ? null : (shape && shape.content),
       filtered: true,
@@ -366,7 +374,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Special Elite"
     div.style.background = bg;
     div.style.color = fg;
     div.style.fontFamily = (FONTS[e.font] || FONTS[shape.font]).css;
-    div.style.fontSize = (shape.baseVw * (SIZES[e.size]||1)).toFixed(2) + "vw";
+    div.style.fontSize = (shape.baseCq * (SIZES[e.size]||1)).toFixed(2) + "cqw";
     if(div.getAttribute("contenteditable") !== "true"){
       var rotHandle = div.querySelector(".handle.rotate");
       var resizeHandle = div.querySelector(".handle.resize");
@@ -479,16 +487,29 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Special Elite"
     filterBtn.addEventListener("click", function(){ e.filtered = !e.filtered; updateDiv(e); renderSelbar(); });
     selbar.appendChild(filterBtn);
 
-    var rerollBtn = document.createElement("button");
-    rerollBtn.textContent = "Reroll tilt";
-    rerollBtn.addEventListener("click", function(){
+    var tiltBtn = document.createElement("button");
+    tiltBtn.textContent = Math.abs(e.rot) < 0.05 ? "Tilt it" : "Reroll tilt";
+    tiltBtn.addEventListener("click", function(){
       var shape = SHAPES[e.type];
-      var tilt = e.type==="photo" ? 1.5 : (shape ? shape.tilt : 2);
-      e.rot = rnd(-tilt, tilt);
+      var tiltRange = e.type==="photo" ? 1.5 : (shape ? shape.tilt : 2);
+      var r = rnd(-tiltRange, tiltRange);
+      e.rot = r === 0 ? 0.3 : r; // never land back on exactly flat from this button
       if(e.type==="text"){ e.textClip = TEXT_CLIPS[Math.floor(Math.random()*TEXT_CLIPS.length)]; }
       updateDiv(e);
+      renderSelbar();
     });
-    selbar.appendChild(rerollBtn);
+    selbar.appendChild(tiltBtn);
+
+    if(Math.abs(e.rot) >= 0.05){
+      var straightenBtn = document.createElement("button");
+      straightenBtn.textContent = "Straighten";
+      straightenBtn.addEventListener("click", function(){
+        e.rot = 0;
+        updateDiv(e);
+        renderSelbar();
+      });
+      selbar.appendChild(straightenBtn);
+    }
 
     var delBtn = document.createElement("button");
     delBtn.className = "danger";
@@ -754,3 +775,5 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Special Elite"
   fitPage();
 })();
 </script>
+</body>
+</html>
