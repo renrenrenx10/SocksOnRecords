@@ -6,6 +6,7 @@
 <title>Zine Page Builder</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Old+Standard+TT:ital,wght@0,400;0,700;1,400&family=Permanent+Marker&family=Anton&family=Rock+Salt&family=Courier+Prime:wght@400;700&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
 /* app shell: fixed header + a canvas that is measured in JS and sized to fill whatever space is left
    (height-constrained on a phone, width-constrained on a tall desktop window) -- never fought over with
@@ -33,6 +34,18 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"
 #menuBtn,#aboutBtn{font-weight:700;font-size:11px;background:var(--card);border:1.5px solid var(--line);color:var(--fg);padding:7px 8px;cursor:pointer;white-space:nowrap}
 #saveBtn{font-weight:700;font-size:11px;background:var(--accent);border:1.5px solid var(--accent);color:#fff;padding:7px 8px;cursor:pointer;white-space:nowrap}
 #saveBtn:disabled{opacity:.6}
+
+#authGate{position:fixed;inset:0;z-index:60;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px}
+body.authed #authGate{display:none}
+body:not(.authed) #app{display:none}
+.authCard{max-width:340px;width:100%;text-align:center}
+.authCard h1{font-weight:700;font-size:22px;margin:0 0 8px}
+.authCard p{font-size:14px;color:var(--mut);margin:0 0 18px;line-height:1.5}
+#authForm{display:flex;flex-direction:column;gap:10px}
+#authForm input{font:15px/1.4 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;padding:10px 12px;border:1.5px solid var(--line);background:var(--card);color:var(--fg)}
+#authForm button{font-weight:700;font-size:13px;background:var(--accent);border:1.5px solid var(--accent);color:#fff;padding:10px;cursor:pointer}
+#authForm button:disabled{opacity:.6}
+#authError{color:var(--accent);font-size:13px;margin:10px 0 0}
 
 #canvasWrap{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;padding:12px 0;position:relative}
 .page{position:relative;background:#f3efe2;aspect-ratio:210/297;overflow:hidden;touch-action:none;transition:background .25s;box-shadow:0 2px 10px rgba(0,0,0,.25);container-type:inline-size;container-name:page}
@@ -113,6 +126,19 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"
 </head>
 <body>
 
+<div id="authGate">
+  <div class="authCard">
+    <h1>Zine Page Builder</h1>
+    <p>Sign in with your Socks On Records login — pages are shared and saved automatically.</p>
+    <form id="authForm">
+      <input type="email" id="authEmail" placeholder="you@email.com" required autocomplete="email">
+      <input type="password" id="authPassword" placeholder="Password" required autocomplete="current-password">
+      <button type="submit" id="authSubmit">Sign in</button>
+    </form>
+    <p id="authError" hidden></p>
+  </div>
+</div>
+
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <filter id="copier" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
     <feColorMatrix type="saturate" values="0"/>
@@ -163,6 +189,20 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"
     <p class="drawerHint">Drag a piece's body to move it, the red dot to resize, the green dot above it to rotate. Tap a selected text-bearing piece again to type.</p>
 
     <section>
+      <h2>Issue</h2>
+      <div class="ctl" id="issueTabs"></div>
+      <h2 style="margin-top:14px">Pages</h2>
+      <div id="pageList"></div>
+      <div class="ctl" style="margin-top:8px">
+        <button id="addPageBtn">+ Add page</button>
+      </div>
+      <label class="row" style="margin-top:10px">
+        <span class="lbl">Title</span>
+        <input type="text" id="pageTitle" placeholder="(untitled)" style="flex:1;font:inherit;background:none;border:1.5px solid var(--line);color:var(--fg);padding:5px 8px">
+      </label>
+    </section>
+
+    <section>
       <h2>Add a shape</h2>
       <div class="toolbar">
         <button data-add="text">+ Text scrap</button>
@@ -200,6 +240,16 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"
       <h2>Layers, front to back</h2>
       <div id="layerList"></div>
     </section>
+
+    <section>
+      <h2>Account</h2>
+      <div class="ctl">
+        <span class="lbl" id="acctEmail"></span>
+      </div>
+      <div class="ctl">
+        <button id="signOutBtn">Sign out</button>
+      </div>
+    </section>
   </div>
 </div>
 
@@ -217,13 +267,15 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"
       <li>Change a piece's text size (S–XXL), font and colour (invert), and replace a photo any time.</li>
       <li>Turn the photocopier harshness up or down for the whole page, or keep one piece "clean" while the rest gets copied.</li>
       <li>Reorder layers front-to-back, delete a piece, and pick the paper colour.</li>
+      <li>Add pages, switch between them, reorder them, and give each one a title. Everyone signed in can see every page.</li>
+      <li>Everything saves automatically as you work — close the tab and come back any time.</li>
       <li>Save the page as an image to look at or share outside the browser.</li>
     </ul>
     <h2>What it can't do (yet)</h2>
     <ul>
-      <li>Doesn't save anything — close the tab or reload and your page is gone, so save an image before you leave.</li>
-      <li>One page at a time — no spreads or multi-page zines yet.</li>
       <li>No undo — if you delete something or mess up a piece, you'll need to re-add it.</li>
+      <li>You can only edit or delete your own pages — someone else's page is read-only to you.</li>
+      <li>No spreads yet — each page is a single side.</li>
       <li>Very long text in a small piece will just get clipped, not shrunk to fit.</li>
       <li>No multi-select — pieces are moved and resized one at a time.</li>
       <li>The saved image is a best-effort snapshot — the photocopy filter sometimes doesn't carry over perfectly.</li>
@@ -251,6 +303,292 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"
   function uid(){ return Math.random().toString(36).slice(2,9); }
   function byId(id){ return els.find(function(x){ return x.id===id; }); }
   function rnd(min,max){ return min + Math.random()*(max-min); }
+
+  // --- Supabase: pages are shared with, and saved through, the same project as the
+  // Socks On Records site, so contributor logins are the same accounts. ---
+  var SUPABASE_URL = "https://xnbkdgmojfupjerqorcw.supabase.co";
+  var SUPABASE_KEY = "sb_publishable__XrZLQTrqwf9xeLBn5xI7w_vVgFJzCf";
+  var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  var currentUser = null;
+  var currentPageRow = null; // the zine_pages row currently loaded into the canvas
+  var currentIssue = 1;      // which issue's pages are shown in the Pages list
+  var pageRows = [];         // every page, across every issue
+  var profileCache = {};     // user id -> display name, filled in as pages are loaded
+  var saveTimer = null;
+  var suppressSave = false;  // true while hydrating a page from the DB, so loading never re-triggers a save
+
+  var authGate = document.getElementById("authGate");
+  var authForm = document.getElementById("authForm");
+  var authEmail = document.getElementById("authEmail");
+  var authPassword = document.getElementById("authPassword");
+  var authSubmit = document.getElementById("authSubmit");
+  var authError = document.getElementById("authError");
+  var pageList = document.getElementById("pageList");
+  var issueTabs = document.getElementById("issueTabs");
+  var pageTitleInput = document.getElementById("pageTitle");
+  var acctEmail = document.getElementById("acctEmail");
+
+  authForm.addEventListener("submit", function(ev){
+    ev.preventDefault();
+    var email = authEmail.value.trim();
+    var password = authPassword.value;
+    if(!email || !password) return;
+    authSubmit.disabled = true;
+    authSubmit.textContent = "Signing in…";
+    authError.hidden = true;
+    sb.auth.signInWithPassword({ email: email, password: password }).then(function(res){
+      authSubmit.disabled = false;
+      authSubmit.textContent = "Sign in";
+      if(res.error){
+        authError.textContent = res.error.message || "Couldn't sign in — check your email and password.";
+        authError.hidden = false;
+      }
+      // success is picked up by onAuthStateChange below
+    });
+  });
+
+  document.getElementById("signOutBtn").addEventListener("click", function(){
+    flushSave();
+    sb.auth.signOut();
+  });
+
+  sb.auth.onAuthStateChange(function(event, session){
+    if(session && session.user){
+      onSignedIn(session.user);
+    } else {
+      currentUser = null;
+      currentPageRow = null;
+      document.body.classList.remove("authed");
+      authPassword.value = "";
+    }
+  });
+
+  function onSignedIn(user){
+    if(currentUser && currentUser.id === user.id) return;
+    currentUser = user;
+    document.body.classList.add("authed");
+    acctEmail.textContent = user.email || "";
+    loadPages();
+  }
+
+  // --- issues: pages are grouped by issue_number, like folders. ---
+  function issuesList(){
+    var set = {};
+    pageRows.forEach(function(p){ set[p.issue_number || 1] = true; });
+    return Object.keys(set).map(Number).sort(function(a,b){ return a-b; });
+  }
+  function pagesInIssue(n){
+    return pageRows.filter(function(p){ return (p.issue_number||1) === n; })
+      .sort(function(a,b){ return a.page_order - b.page_order; });
+  }
+  function renderIssueTabs(){
+    issueTabs.innerHTML = "";
+    issuesList().forEach(function(n){
+      var b = document.createElement("button");
+      b.textContent = "Issue " + n;
+      b.setAttribute("aria-pressed", String(n===currentIssue));
+      b.addEventListener("click", function(){
+        currentIssue = n;
+        renderIssueTabs();
+        renderPageList();
+        var pages = pagesInIssue(n);
+        if(pages[0]) switchToPage(pages[0]);
+      });
+      issueTabs.appendChild(b);
+    });
+    var newBtn = document.createElement("button");
+    newBtn.textContent = "+ New issue";
+    newBtn.addEventListener("click", createIssue);
+    issueTabs.appendChild(newBtn);
+  }
+
+  // --- pages: list, load, create, reorder, delete ---
+  function loadPages(){
+    sb.from("zine_pages").select("*").order("page_order", { ascending:true }).then(function(res){
+      if(res.error){ alert("Couldn't load pages: " + res.error.message); return; }
+      pageRows = res.data || [];
+      if(pageRows.length === 0){ createPage(); return; }
+      var authorIds = pageRows.map(function(p){ return p.created_by; }).filter(Boolean);
+      loadProfiles(authorIds).then(function(){
+        var keep = currentPageRow && pageRows.filter(function(p){ return p.id===currentPageRow.id; })[0];
+        var startRow = keep || pageRows[0];
+        currentIssue = startRow.issue_number || 1;
+        renderIssueTabs();
+        renderPageList();
+        switchToPage(startRow);
+      });
+    });
+  }
+
+  function loadProfiles(ids){
+    var missing = ids.filter(function(id){ return id && !(id in profileCache); });
+    if(missing.length === 0) return Promise.resolve();
+    return sb.from("profiles").select("id,display_name,email").in("id", missing).then(function(res){
+      (res.data||[]).forEach(function(p){ profileCache[p.id] = p.display_name || (p.email||"").split("@")[0] || "someone"; });
+    });
+  }
+
+  function authorLabel(userId){
+    if(currentUser && userId === currentUser.id) return "you";
+    return profileCache[userId] || "someone";
+  }
+
+  function renderPageList(){
+    pageList.innerHTML = "";
+    var rows = pagesInIssue(currentIssue);
+    rows.forEach(function(row, i){
+      var r = document.createElement("div");
+      r.className = "layerrow" + (currentPageRow && row.id===currentPageRow.id ? " active" : "");
+      var nameBtn = document.createElement("button");
+      nameBtn.className = "name";
+      nameBtn.textContent = "Page " + (i+1) + (row.title ? " — " + row.title : "") + " · " + authorLabel(row.created_by);
+      nameBtn.addEventListener("click", function(){ switchToPage(row); closeDrawer(); });
+      r.appendChild(nameBtn);
+
+      if(i > 0){
+        var upBtn = document.createElement("button");
+        upBtn.className = "mini"; upBtn.title = "Move earlier"; upBtn.textContent = "↑";
+        upBtn.addEventListener("click", function(){ movePage(rows, i, -1); });
+        r.appendChild(upBtn);
+      }
+      if(i < rows.length-1){
+        var downBtn = document.createElement("button");
+        downBtn.className = "mini"; downBtn.title = "Move later"; downBtn.textContent = "↓";
+        downBtn.addEventListener("click", function(){ movePage(rows, i, 1); });
+        r.appendChild(downBtn);
+      }
+      if(currentUser && row.created_by === currentUser.id){
+        var delBtn = document.createElement("button");
+        delBtn.className = "mini"; delBtn.title = "Delete this page"; delBtn.textContent = "✕";
+        delBtn.addEventListener("click", function(){ deletePage(row); });
+        r.appendChild(delBtn);
+      }
+      pageList.appendChild(r);
+    });
+  }
+
+  function movePage(rows, index, dir){
+    var other = index + dir;
+    if(other < 0 || other >= rows.length) return;
+    var a = rows[index], b = rows[other];
+    var tmp = a.page_order; a.page_order = b.page_order; b.page_order = tmp;
+    renderPageList();
+    sb.from("zine_pages").update({ page_order: a.page_order }).eq("id", a.id).then(function(){});
+    sb.from("zine_pages").update({ page_order: b.page_order }).eq("id", b.id).then(function(){});
+  }
+
+  function createPage(){
+    var issue = currentIssue || 1;
+    var maxOrder = pagesInIssue(issue).reduce(function(m,p){ return Math.max(m, p.page_order); }, -1);
+    sb.from("zine_pages").insert({
+      created_by: currentUser.id,
+      issue_number: issue,
+      page_order: maxOrder + 1,
+      title: "",
+      elements: [],
+      paper: "white",
+      harshness: 22
+    }).select().single().then(function(res){
+      if(res.error){ alert("Couldn't create the page: " + res.error.message); return; }
+      pageRows.push(res.data);
+      renderIssueTabs();
+      switchToPage(res.data);
+      renderPageList();
+      closeDrawer();
+    });
+  }
+
+  function createIssue(){
+    var next = issuesList().reduce(function(m,n){ return Math.max(m,n); }, 0) + 1;
+    currentIssue = next;
+    sb.from("zine_pages").insert({
+      created_by: currentUser.id,
+      issue_number: next,
+      page_order: 0,
+      title: "",
+      elements: [],
+      paper: "white",
+      harshness: 22
+    }).select().single().then(function(res){
+      if(res.error){ alert("Couldn't create the issue: " + res.error.message); return; }
+      pageRows.push(res.data);
+      renderIssueTabs();
+      switchToPage(res.data);
+      renderPageList();
+      closeDrawer();
+    });
+  }
+
+  function deletePage(row){
+    if(pagesInIssue(currentIssue).length <= 1){ alert("You need at least one page in this issue — add another before deleting this one."); return; }
+    if(!confirm("Delete this page? This can't be undone.")) return;
+    sb.from("zine_pages").delete().eq("id", row.id).then(function(res){
+      if(res.error){ alert("Couldn't delete: " + res.error.message); return; }
+      pageRows = pageRows.filter(function(p){ return p.id !== row.id; });
+      if(currentPageRow && currentPageRow.id === row.id){ switchToPage(pagesInIssue(currentIssue)[0]); }
+      renderPageList();
+    });
+  }
+
+  function switchToPage(row){
+    if(!row) return;
+    flushSave();
+    currentPageRow = row;
+    if((row.issue_number||1) !== currentIssue){ currentIssue = row.issue_number||1; renderIssueTabs(); }
+    suppressSave = true;
+
+    page.innerHTML = "";
+    els = [];
+    domMap = {};
+    zTop = 1;
+    selectedId = null;
+
+    document.querySelectorAll(".swatch").forEach(function(b){ b.setAttribute("aria-pressed", String(b.getAttribute("data-stock")===(row.paper||"white"))); });
+    page.className = "page stock-" + (row.paper || "white");
+    harsh.value = row.harshness != null ? row.harshness : 22;
+    harshVal.textContent = harsh.value;
+    applyHarshness(parseInt(harsh.value,10));
+    pageTitleInput.value = row.title || "";
+
+    (row.elements || []).forEach(function(e){
+      if(typeof e.z === "number") zTop = Math.max(zTop, e.z);
+      els.push(e);
+      createDiv(e);
+    });
+
+    selectEl(null);
+    renderLayers();
+    renderPageList();
+    requestAnimationFrame(fitPage);
+    suppressSave = false;
+  }
+
+  pageTitleInput.addEventListener("input", function(){ scheduleSave(); renderPageList(); });
+
+  // --- autosave: debounced so a drag or a flurry of edits is one write, not dozens ---
+  function scheduleSave(){
+    if(suppressSave || !currentPageRow) return;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveNow, 700);
+  }
+  function flushSave(){
+    if(saveTimer){ clearTimeout(saveTimer); saveTimer = null; saveNow(); }
+  }
+  function saveNow(){
+    if(!currentPageRow) return;
+    var row = currentPageRow;
+    var payload = {
+      elements: els,
+      paper: (page.className.replace("page","").replace("stock-","").trim()) || "white",
+      harshness: parseInt(harsh.value,10),
+      title: pageTitleInput.value || null,
+      updated_at: new Date().toISOString()
+    };
+    sb.from("zine_pages").update(payload).eq("id", row.id).then(function(res){
+      if(res.error){ console.error("zine save failed", res.error); }
+    });
+  }
+  window.addEventListener("beforeunload", flushSave);
 
   // --- drawer open/close ---
   var aboutPanel = document.getElementById("aboutPanel");
@@ -417,6 +755,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"
         img.style.display = "none"; add.style.display = "flex";
         shapeEl.style.background = "#d8d2bd";
       }
+      scheduleSave();
       return;
     }
 
@@ -439,6 +778,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"
     if(shapeEl.getAttribute("contenteditable") !== "true"){
       shapeEl.textContent = e.content;
     }
+    scheduleSave();
   }
 
   function refreshAllFilters(){ els.forEach(updateDiv); }
@@ -468,6 +808,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"
     if(div) div.style.zIndex = e.z;
     reorderDom();
     renderLayers();
+    scheduleSave();
   }
   function sendToBack(id){
     var e = byId(id);
@@ -478,6 +819,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"
     if(div) div.style.zIndex = e.z;
     reorderDom();
     renderLayers();
+    scheduleSave();
   }
 
   function labelFor(e){
@@ -578,6 +920,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"
       els = els.filter(function(x){ return x.id!==e.id; });
       selectEl(null);
       renderLayers();
+      scheduleSave();
     });
     selbar.appendChild(delBtn);
 
@@ -635,18 +978,33 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"
     shapeEl.addEventListener("blur", onBlur);
   }
 
+  // photos upload to Supabase Storage (not inline base64 -- keeps the saved page small and fast)
   function pickPhoto(id){
     var input = document.createElement("input");
     input.type = "file"; input.accept = "image/*";
     input.addEventListener("change", function(){
       var file = input.files && input.files[0];
       if(!file) return;
-      var reader = new FileReader();
-      reader.onload = function(){
-        var e = byId(id);
-        if(e){ e.content = reader.result; updateDiv(e); renderLayers(); }
-      };
-      reader.readAsDataURL(file);
+      var e = byId(id);
+      if(!e) return;
+      var div = domMap[id];
+      var shapeEl = div && div.querySelector(".shape");
+      var addSpan = shapeEl && shapeEl.querySelector(".add");
+      if(addSpan) addSpan.textContent = "Uploading…";
+      var ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g,"") || "jpg";
+      var path = (currentPageRow ? currentPageRow.id : "misc") + "/" + uid() + "." + ext;
+      sb.storage.from("zine-images").upload(path, file, { upsert:true, contentType: file.type || "image/jpeg" }).then(function(res){
+        if(res.error){
+          alert("Couldn't upload the photo: " + res.error.message);
+          if(addSpan) addSpan.textContent = "+ tap to add a photo";
+          return;
+        }
+        var pub = sb.storage.from("zine-images").getPublicUrl(path);
+        e.content = pub.data.publicUrl;
+        e.photoPath = path;
+        updateDiv(e);
+        renderLayers();
+      });
     });
     input.click();
   }
@@ -686,6 +1044,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"
       div.removeEventListener("pointerup", up);
       div.removeEventListener("pointercancel", up);
       gesture = { id:id, moved: moved, wasSelected: wasSelected };
+      if(moved) scheduleSave();
     }
     div.addEventListener("pointermove", move);
     div.addEventListener("pointerup", up);
@@ -722,6 +1081,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"
       div.removeEventListener("pointermove", move);
       div.removeEventListener("pointerup", up);
       div.removeEventListener("pointercancel", up);
+      scheduleSave();
     }
     div.addEventListener("pointermove", move);
     div.addEventListener("pointerup", up);
@@ -750,6 +1110,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"
       div.removeEventListener("pointermove", move);
       div.removeEventListener("pointerup", up);
       div.removeEventListener("pointercancel", up);
+      scheduleSave();
     }
     div.addEventListener("pointermove", move);
     div.addEventListener("pointerup", up);
@@ -785,6 +1146,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"
     btn.addEventListener("click", function(){
       document.querySelectorAll(".swatch").forEach(function(b){ b.setAttribute("aria-pressed", String(b===btn)); });
       page.className = "page stock-" + btn.getAttribute("data-stock");
+      scheduleSave();
     });
   });
 
@@ -815,6 +1177,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"
   harsh.addEventListener("input", function(){
     harshVal.textContent = harsh.value;
     applyHarshness(parseInt(harsh.value,10));
+    scheduleSave();
   });
   applyHarshness(parseInt(harsh.value,10));
 
@@ -872,10 +1235,10 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"
     });
   });
 
-  // page loads blank, ready for a fresh piece -- no starter content
-  selectEl(null);
-  renderLayers();
   fitPage();
+  sb.auth.getSession().then(function(res){
+    if(res.data && res.data.session){ onSignedIn(res.data.session.user); }
+  });
 })();
 </script>
 </body>
