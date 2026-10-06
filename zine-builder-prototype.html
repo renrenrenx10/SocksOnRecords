@@ -36,6 +36,9 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"
 #aboutBtn,#menuBtn{padding:7px 10px}
 #saveBtn{font-weight:700;font-size:10.5px;background:var(--accent);border:1.5px solid var(--accent);color:#fff;padding:7px 6px;cursor:pointer;white-space:nowrap}
 #saveBtn:disabled{opacity:.6}
+#saveStatus{flex:0 0 auto;font-size:11px;color:var(--mut);padding:4px 2px 0;text-align:right}
+#saveStatus.pending{color:var(--accent)}
+#saveStatus.err{color:var(--accent);font-weight:700}
 
 #authGate{position:fixed;inset:0;z-index:60;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px}
 body.authed #authGate{display:none}
@@ -165,13 +168,14 @@ body:not(.authed) #app{display:none}
   <div id="topbar">
     <h1>Zine Page Builder</h1>
     <div class="tbtns">
-      <button id="saveBtn">⬇ Save</button>
+      <button id="saveBtn">⬇ Export image</button>
       <button id="pagesBtn" title="Pages &amp; issues">📑 Pages</button>
       <button id="layersBtn" title="Layers">🗂 Layers</button>
       <button id="aboutBtn" title="About">?</button>
       <button id="menuBtn" title="Menu">☰</button>
     </div>
   </div>
+  <div id="saveStatus">All changes saved</div>
 
   <div id="canvasWrap">
     <div class="page stock-white" id="page"></div>
@@ -792,13 +796,22 @@ body:not(.authed) #app{display:none}
     renderPageList();
     requestAnimationFrame(fitPage);
     suppressSave = false;
+    setSaveStatus("All changes saved");
   }
 
   pageTitleInput.addEventListener("input", function(){ scheduleSave(); renderPageList(); });
 
   // --- autosave: debounced so a drag or a flurry of edits is one write, not dozens ---
+  // A visible status line (not just a silent background write) so it's obvious when something
+  // hasn't gone through yet, rather than trusting a save happened invisibly.
+  var saveStatusEl = document.getElementById("saveStatus");
+  function setSaveStatus(text, cls){
+    saveStatusEl.textContent = text;
+    saveStatusEl.className = cls || "";
+  }
   function scheduleSave(){
     if(suppressSave || !currentPageRow) return;
+    setSaveStatus("Unsaved changes…", "pending");
     clearTimeout(saveTimer);
     saveTimer = setTimeout(function(){ saveTimer = null; saveNow(); }, 700);
   }
@@ -812,15 +825,32 @@ body:not(.authed) #app{display:none}
   function saveNow(){
     if(!currentPageRow) return;
     var row = currentPageRow;
+    var paper = (page.className.replace("page","").replace("stock-","").trim()) || "white";
+    var harshness = parseInt(harsh.value,10);
+    var title = pageTitleInput.value || null;
+    // Keep the cached row (the one the Pages list / future switchToPage() calls read from) in sync
+    // with what's being saved -- els is only ever pushed to, never written back onto row.elements,
+    // so without this, navigating away and back shows the stale pre-edit version of the page even
+    // though the database itself has the real content.
+    row.elements = els;
+    row.paper = paper;
+    row.harshness = harshness;
+    row.title = title;
     var payload = {
       elements: els,
-      paper: (page.className.replace("page","").replace("stock-","").trim()) || "white",
-      harshness: parseInt(harsh.value,10),
-      title: pageTitleInput.value || null,
+      paper: paper,
+      harshness: harshness,
+      title: title,
       updated_at: new Date().toISOString()
     };
+    setSaveStatus("Saving…", "pending");
     sb.from("zine_pages").update(payload).eq("id", row.id).then(function(res){
-      if(res.error){ console.error("zine save failed", res.error); }
+      if(res.error){
+        console.error("zine save failed", res.error);
+        setSaveStatus("Couldn't save — check your connection", "err");
+        return;
+      }
+      setSaveStatus("All changes saved");
     });
   }
   window.addEventListener("beforeunload", flushSave);
