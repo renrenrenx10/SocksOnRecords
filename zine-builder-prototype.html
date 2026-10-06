@@ -797,12 +797,21 @@ body:not(.authed) #app{display:none}
   }
 
   function syncSpreadMirror(){
-    if(!spreadMode) return;
-    var siblingRow = spreadActiveSide==="left" ? spreadRightRow : spreadLeftRow;
-    if(!siblingRow) return;
-    var shift = spreadActiveSide==="left" ? -100 : 100;
+    if(!spreadMode || !currentPageRow || !spreadLeftRow || !spreadRightRow) return;
+    // Which side is actually loaded right now (els/currentPageRow) can briefly be the FACING
+    // page -- captureRowSnapshot() has to switchToPage() onto it to screenshot it, and that
+    // switch's own flushSave() can land here mid-flight. Trusting spreadActiveSide blindly in
+    // that window mirrored the wrong page's content onto the wrong target. Deriving the side
+    // from which row is actually loaded makes this safe regardless of when it's called.
+    var side;
+    if(currentPageRow.id === spreadLeftRow.id) side = "left";
+    else if(currentPageRow.id === spreadRightRow.id) side = "right";
+    else return; // not currently showing either spread page -- nothing to mirror
+    var siblingRow = side==="left" ? spreadRightRow : spreadLeftRow;
+    var shift = side==="left" ? -100 : 100;
     var overflowing = els.filter(function(e){
-      return spreadActiveSide==="left" ? (e.x+e.w > 100.5) : (e.x < -0.5);
+      if(e.spreadMirror) return false; // a mirror is SUPPOSED to sit out of its own page's bounds -- never re-mirror it
+      return side==="left" ? (e.x+e.w > 100.5) : (e.x < -0.5);
     });
     var mirrors = overflowing.map(function(e){
       var copy = Object.assign({}, e);
