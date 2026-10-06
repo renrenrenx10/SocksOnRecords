@@ -709,7 +709,11 @@ body:not(.authed) #app{display:none}
       var nameBtn = document.createElement("button");
       nameBtn.className = "name";
       nameBtn.textContent = "Page " + (i+1) + (row.title ? " — " + row.title : "") + " · " + authorLabel(row.created_by);
-      nameBtn.addEventListener("click", function(){ switchToPage(row); closeDrawer(); });
+      nameBtn.addEventListener("click", function(){
+        if(spreadMode) exitSpreadMode(); // otherwise the canvas stays stuck at spread's half-width sizing
+        switchToPage(row);
+        closeDrawer();
+      });
       r.appendChild(nameBtn);
 
       if(i > 0){
@@ -760,12 +764,33 @@ body:not(.authed) #app{display:none}
     var rows = pagesInIssue(primaryRow.issue_number || currentIssue);
     var idx = -1;
     for(var i=0;i<rows.length;i++){ if(rows[i].id===primaryRow.id){ idx=i; break; } }
-    if(idx===-1 || idx>=rows.length-1){ alert("Add another page after this one first — a spread needs two pages."); return; }
+    if(idx===-1) return;
     spreadLeftRow = rows[idx];
-    spreadRightRow = rows[idx+1];
     spreadActiveSide = "left";
     flushSave();
-    openSpreadActiveSide();
+    if(idx < rows.length-1){
+      spreadRightRow = rows[idx+1];
+      openSpreadActiveSide();
+      return;
+    }
+    // No facing page yet -- create one rather than blocking, matching the user's own suggestion.
+    var issue = primaryRow.issue_number || currentIssue;
+    sb.from("zine_pages").insert({
+      created_by: currentUser.id,
+      issue_number: issue,
+      page_order: primaryRow.page_order + 1,
+      title: "",
+      elements: [],
+      paper: primaryRow.paper || "white",
+      harshness: primaryRow.harshness != null ? primaryRow.harshness : 22
+    }).select().single().then(function(res){
+      if(res.error){ alert("Couldn't create the facing page: " + res.error.message); return; }
+      pageRows.push(res.data);
+      renderIssueTabs();
+      renderPageList();
+      spreadRightRow = res.data;
+      openSpreadActiveSide();
+    });
   }
 
   function captureRowSnapshot(row){
