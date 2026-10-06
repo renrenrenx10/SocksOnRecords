@@ -31,9 +31,9 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"
 
 #topbar{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:8px;padding-block:calc(10px + env(safe-area-inset-top,0px)) 8px;border-bottom:1.5px solid var(--line)}
 #topbar h1{font-weight:700;font-size:16px;margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#topbar .tbtns{display:flex;gap:5px;flex:0 0 auto}
-#menuBtn,#aboutBtn{font-weight:700;font-size:11px;background:var(--card);border:1.5px solid var(--line);color:var(--fg);padding:7px 8px;cursor:pointer;white-space:nowrap}
-#saveBtn{font-weight:700;font-size:11px;background:var(--accent);border:1.5px solid var(--accent);color:#fff;padding:7px 8px;cursor:pointer;white-space:nowrap}
+#topbar .tbtns{display:flex;gap:4px;flex:0 0 auto}
+#menuBtn,#aboutBtn,#pagesBtn{font-weight:700;font-size:10.5px;background:var(--card);border:1.5px solid var(--line);color:var(--fg);padding:7px 6px;cursor:pointer;white-space:nowrap}
+#saveBtn{font-weight:700;font-size:10.5px;background:var(--accent);border:1.5px solid var(--accent);color:#fff;padding:7px 6px;cursor:pointer;white-space:nowrap}
 #saveBtn:disabled{opacity:.6}
 
 #authGate{position:fixed;inset:0;z-index:60;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px}
@@ -165,6 +165,7 @@ body:not(.authed) #app{display:none}
     <h1>Zine Page Builder</h1>
     <div class="tbtns">
       <button id="saveBtn">⬇ Save</button>
+      <button id="pagesBtn">📑 Pages</button>
       <button id="aboutBtn">? About</button>
       <button id="menuBtn">☰ Menu</button>
     </div>
@@ -190,29 +191,6 @@ body:not(.authed) #app{display:none}
     <p class="drawerHint">Drag a piece's body to move it, the red dot to resize, the green dot above it to rotate. Tap a selected text-bearing piece again to type.</p>
 
     <section>
-      <h2>Issue</h2>
-      <div class="ctl" id="issueTabs"></div>
-      <div class="ctl" style="margin-top:8px;align-items:center">
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px">
-          <input type="checkbox" id="publishToggle"> Published (visible in the digital reader)
-        </label>
-      </div>
-      <div class="ctl" style="margin-top:8px">
-        <button id="exportPdfBtn">📄 Export issue as PDF</button>
-      </div>
-      <p id="pdfStatus" class="mini-note" style="margin:4px 0 0;min-height:1em"></p>
-      <h2 style="margin-top:14px">Pages</h2>
-      <div id="pageList"></div>
-      <div class="ctl" style="margin-top:8px">
-        <button id="addPageBtn">+ Add page</button>
-      </div>
-      <label class="row" style="margin-top:10px">
-        <span class="lbl">Title</span>
-        <input type="text" id="pageTitle" placeholder="(untitled)" style="flex:1;font:inherit;background:none;border:1.5px solid var(--line);color:var(--fg);padding:5px 8px">
-      </label>
-    </section>
-
-    <section>
       <h2>Add a shape</h2>
       <div class="toolbar">
         <button data-add="text">+ Text scrap</button>
@@ -226,6 +204,7 @@ body:not(.authed) #app{display:none}
         <button data-add="stamp">+ Stamp</button>
         <button data-add="outline">+ Outlined note</button>
         <button data-add="bolt">+ Lightning bolt</button>
+        <button id="addGigBtn">+ Gig listing</button>
       </div>
     </section>
 
@@ -264,6 +243,51 @@ body:not(.authed) #app{display:none}
   </div>
 </div>
 
+<div id="pagesPanel" class="sheet">
+  <div class="drawerHead">
+    <strong>Pages &amp; issues</strong>
+    <button id="pagesClose">Close</button>
+  </div>
+  <div class="drawerBody">
+    <section>
+      <h2>Issue</h2>
+      <div class="ctl" id="issueTabs"></div>
+      <div class="ctl" style="margin-top:8px;align-items:center">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px">
+          <input type="checkbox" id="publishToggle"> Published (visible in the digital reader)
+        </label>
+      </div>
+      <div class="ctl" style="margin-top:8px">
+        <button id="exportPdfBtn">📄 Export issue as PDF</button>
+      </div>
+      <p id="pdfStatus" class="mini-note" style="margin:4px 0 0;min-height:1em"></p>
+    </section>
+
+    <section>
+      <h2>Pages</h2>
+      <div id="pageList"></div>
+      <div class="ctl" style="margin-top:8px">
+        <button id="addPageBtn">+ Add page</button>
+      </div>
+      <label class="row" style="margin-top:10px">
+        <span class="lbl">Title</span>
+        <input type="text" id="pageTitle" placeholder="(untitled)" style="flex:1;font:inherit;background:none;border:1.5px solid var(--line);color:var(--fg);padding:5px 8px">
+      </label>
+    </section>
+  </div>
+</div>
+
+<div id="gigPanel" class="sheet">
+  <div class="drawerHead">
+    <strong>Add a gig</strong>
+    <button id="gigClose">Close</button>
+  </div>
+  <div class="drawerBody">
+    <p class="drawerHint">Upcoming gigs from the Socks On Records site. Tap one to drop its details onto the page as a text piece — then edit the wording however you like.</p>
+    <div id="gigList"></div>
+  </div>
+</div>
+
 <div id="aboutPanel" class="sheet">
   <div class="drawerHead">
     <strong>About this builder</strong>
@@ -273,6 +297,8 @@ body:not(.authed) #app{display:none}
     <h2>What you can do</h2>
     <ul>
       <li>Add text scraps, a photo, a headline bar, a burst, a speech bubble, a circle badge, an arrow banner, a ticket stub, a stamp, an outlined note or a lightning bolt.</li>
+      <li>Add a gig listing pulled straight from the Socks On Records site (upcoming gigs only) — tap it in "+ Gig listing" and it drops in as editable text.</li>
+      <li>Pages, issues, publishing and the PDF export live under their own "📑 Pages" button, separate from the Menu.</li>
       <li>Drag a piece to move it, drag its red dot to resize, drag its green dot to rotate — or use "Tilt it" / "Straighten" for a quick angle.</li>
       <li>Tap a selected text piece again to edit the words.</li>
       <li>Change a piece's text size (S–XXL), font and colour (invert), and replace a photo any time.</li>
@@ -451,6 +477,72 @@ body:not(.authed) #app{display:none}
     updatePublishToggle();
   }
 
+  // --- gigs: pulled from the Socks On Records site's own "gigs"/"gig_acts" tables (same Supabase
+  // project), so the line-up and venue details never have to be retyped by hand. ---
+  var gigsLoaded = false;
+  function loadUpcomingGigs(){
+    var gigList = document.getElementById("gigList");
+    if(gigsLoaded) return; // cached for the session -- reopen the panel as often as you like
+    gigList.innerHTML = "<p class=\"drawerHint\">Loading…</p>";
+    var today = new Date().toISOString().slice(0,10);
+    sb.from("gigs").select("*").gte("event_date", today).order("event_date", { ascending:true }).then(function(res){
+      if(res.error){ gigList.innerHTML = "<p class=\"drawerHint\">Couldn't load gigs: " + res.error.message + "</p>"; return; }
+      var gigs = res.data || [];
+      if(gigs.length === 0){ gigList.innerHTML = "<p class=\"drawerHint\">No upcoming gigs listed on the site yet.</p>"; return; }
+      var ids = gigs.map(function(g){ return g.id; });
+      sb.from("gig_acts").select("*").in("gig_id", ids).then(function(actsRes){
+        var actsByGig = {};
+        (actsRes.data || []).forEach(function(a){
+          (actsByGig[a.gig_id] = actsByGig[a.gig_id] || []).push(a);
+        });
+        var bandIds = (actsRes.data || []).map(function(a){ return a.band_id; }).filter(Boolean);
+        var bandFetch = bandIds.length ? sb.from("bands").select("id,name").in("id", bandIds) : Promise.resolve({ data: [] });
+        bandFetch.then(function(bRes){
+          var bandNames = {};
+          (bRes.data || []).forEach(function(b){ bandNames[b.id] = b.name; });
+          gigsLoaded = true;
+          renderGigList(gigs, actsByGig, bandNames);
+        });
+      });
+    });
+  }
+  function formatGigDate(iso){
+    var d = new Date(iso + "T00:00:00");
+    if(isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString("en-GB", { weekday:"short", day:"numeric", month:"short", year:"numeric" });
+  }
+  function formatGigText(g, acts, bandNames){
+    var lines = [];
+    lines.push(g.title || "Gig");
+    var when = [formatGigDate(g.event_date), g.time_text].filter(Boolean).join(" · ");
+    if(when) lines.push(when);
+    var venue = [g.venue_name, g.venue_address].filter(Boolean).join(", ");
+    if(venue) lines.push(venue);
+    if(g.price_text) lines.push(g.price_text);
+    var names = (acts || []).slice().sort(function(a,b){ return (a.position||0)-(b.position||0); })
+      .map(function(a){ return a.act_name || bandNames[a.band_id] || ""; }).filter(Boolean);
+    if(names.length) lines.push("Line-up: " + names.join(", "));
+    if(g.ticket_url) lines.push(g.ticket_url);
+    return lines.join("\n");
+  }
+  function renderGigList(gigs, actsByGig, bandNames){
+    var gigList = document.getElementById("gigList");
+    gigList.innerHTML = "";
+    gigs.forEach(function(g){
+      var row = document.createElement("div");
+      row.className = "layerrow";
+      var btn = document.createElement("button");
+      btn.className = "name";
+      btn.textContent = formatGigDate(g.event_date) + " — " + (g.title || "Gig") + (g.venue_name ? " @ " + g.venue_name : "");
+      btn.addEventListener("click", function(){
+        addEl("text", { content: formatGigText(g, actsByGig[g.id], bandNames) });
+        closeDrawer();
+      });
+      row.appendChild(btn);
+      gigList.appendChild(row);
+    });
+  }
+
   // --- pages: list, load, create, reorder, delete ---
   function loadPages(){
     sb.from("zine_pages").select("*").order("page_order", { ascending:true }).then(function(res){
@@ -618,10 +710,14 @@ body:not(.authed) #app{display:none}
   function scheduleSave(){
     if(suppressSave || !currentPageRow) return;
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(saveNow, 700);
+    saveTimer = setTimeout(function(){ saveTimer = null; saveNow(); }, 700);
   }
+  // Always saves (not just when a debounce happens to be pending) -- a safety net so switching pages,
+  // signing out or closing the tab can never silently drop an edit that didn't happen to schedule one.
   function flushSave(){
-    if(saveTimer){ clearTimeout(saveTimer); saveTimer = null; saveNow(); }
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    if(!suppressSave && currentPageRow) saveNow();
   }
   function saveNow(){
     if(!currentPageRow) return;
@@ -641,7 +737,9 @@ body:not(.authed) #app{display:none}
 
   // --- drawer open/close ---
   var aboutPanel = document.getElementById("aboutPanel");
-  var panels = [drawer, aboutPanel];
+  var pagesPanel = document.getElementById("pagesPanel");
+  var gigPanel = document.getElementById("gigPanel");
+  var panels = [drawer, aboutPanel, pagesPanel, gigPanel];
   function openPanel(panel){
     panels.forEach(function(p){ p.classList.remove("open"); });
     panel.classList.add("open");
@@ -652,6 +750,10 @@ body:not(.authed) #app{display:none}
   document.getElementById("drawerClose").addEventListener("click", closeDrawer);
   document.getElementById("aboutBtn").addEventListener("click", function(){ openPanel(aboutPanel); });
   document.getElementById("aboutClose").addEventListener("click", closeDrawer);
+  document.getElementById("pagesBtn").addEventListener("click", function(){ openPanel(pagesPanel); });
+  document.getElementById("pagesClose").addEventListener("click", closeDrawer);
+  document.getElementById("addGigBtn").addEventListener("click", function(){ openPanel(gigPanel); loadUpcomingGigs(); });
+  document.getElementById("gigClose").addEventListener("click", closeDrawer);
   backdrop.addEventListener("click", closeDrawer);
 
   // --- canvas sizing: measure the real space available and fit the portrait page into it (object-fit: contain) ---
@@ -1018,11 +1120,13 @@ body:not(.authed) #app{display:none}
       var e = byId(id);
       if(e) e.content = shapeEl.textContent;
       renderLayers();
+      scheduleSave();
     }
     function onBlur(){
       shapeEl.removeAttribute("contenteditable");
       shapeEl.removeEventListener("input", onInput);
       shapeEl.removeEventListener("blur", onBlur);
+      scheduleSave();
     }
     shapeEl.addEventListener("input", onInput);
     shapeEl.addEventListener("blur", onBlur);
