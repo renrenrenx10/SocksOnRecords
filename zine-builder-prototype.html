@@ -56,6 +56,7 @@ body:not(.authed) #app{display:none}
 #canvasWrap.spread-active{gap:2px;background:#000}
 .page{position:relative;background:#f3efe2;aspect-ratio:210/297;overflow:hidden;touch-action:none;transition:background .25s;box-shadow:0 2px 10px rgba(0,0,0,.25);container-type:inline-size;container-name:page}
 #spreadBar{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 10px;background:#171510;color:#f1ede1;font-size:12px}
+#spreadBar[hidden]{display:none}
 #spreadBar .tbtns{display:flex;gap:8px}
 #spreadBar button{background:#2a2a2a;color:#eee;border:1px solid #3a3a3a;border-radius:8px;padding:6px 10px;font-size:12px}
 #spreadSibling{object-fit:contain;background:#f3efe2;box-shadow:0 2px 10px rgba(0,0,0,.25);flex:0 0 auto}
@@ -727,12 +728,17 @@ body:not(.authed) #app{display:none}
         downBtn.className = "mini"; downBtn.title = "Move later"; downBtn.textContent = "↓";
         downBtn.addEventListener("click", function(){ movePage(rows, i, 1); });
         r.appendChild(downBtn);
-
-        var spreadBtn = document.createElement("button");
-        spreadBtn.className = "mini"; spreadBtn.title = "Edit as a two-page spread with the next page"; spreadBtn.textContent = "⇄";
-        spreadBtn.addEventListener("click", function(){ enterSpreadMode(row); closeDrawer(); });
-        r.appendChild(spreadBtn);
       }
+
+      // Not gated on position: when this is the last page, enterSpreadMode creates the facing
+      // page itself, so the button needs to be available here too, not only when a next page
+      // already exists.
+      var spreadBtn = document.createElement("button");
+      spreadBtn.className = "mini";
+      spreadBtn.title = i < rows.length-1 ? "Edit as a two-page spread with the next page" : "Edit as a two-page spread (adds a facing page)";
+      spreadBtn.textContent = "⇄";
+      spreadBtn.addEventListener("click", function(){ enterSpreadMode(row); closeDrawer(); });
+      r.appendChild(spreadBtn);
       if(currentUser && row.created_by === currentUser.id){
         var delBtn = document.createElement("button");
         delBtn.className = "mini"; delBtn.title = "Delete this page"; delBtn.textContent = "✕";
