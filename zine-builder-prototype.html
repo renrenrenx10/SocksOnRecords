@@ -6,6 +6,7 @@
 <title>Zine Page Builder</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Old+Standard+TT:ital,wght@0,400;0,700;1,400&family=Permanent+Marker&family=Anton&family=Rock+Salt&family=Courier+Prime:wght@400;700&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
 /* app shell: fixed header + a canvas that is measured in JS and sized to fill whatever space is left
@@ -191,6 +192,15 @@ body:not(.authed) #app{display:none}
     <section>
       <h2>Issue</h2>
       <div class="ctl" id="issueTabs"></div>
+      <div class="ctl" style="margin-top:8px;align-items:center">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px">
+          <input type="checkbox" id="publishToggle"> Published (visible in the digital reader)
+        </label>
+      </div>
+      <div class="ctl" style="margin-top:8px">
+        <button id="exportPdfBtn">📄 Export issue as PDF</button>
+      </div>
+      <p id="pdfStatus" class="mini-note" style="margin:4px 0 0;min-height:1em"></p>
       <h2 style="margin-top:14px">Pages</h2>
       <div id="pageList"></div>
       <div class="ctl" style="margin-top:8px">
@@ -215,6 +225,7 @@ body:not(.authed) #app{display:none}
         <button data-add="ticket">+ Ticket stub</button>
         <button data-add="stamp">+ Stamp</button>
         <button data-add="outline">+ Outlined note</button>
+        <button data-add="bolt">+ Lightning bolt</button>
       </div>
     </section>
 
@@ -261,15 +272,18 @@ body:not(.authed) #app{display:none}
   <div class="drawerBody aboutBody">
     <h2>What you can do</h2>
     <ul>
-      <li>Add text scraps, a photo, a headline bar, a burst, a speech bubble, a circle badge, an arrow banner, a ticket stub, a stamp or an outlined note.</li>
+      <li>Add text scraps, a photo, a headline bar, a burst, a speech bubble, a circle badge, an arrow banner, a ticket stub, a stamp, an outlined note or a lightning bolt.</li>
       <li>Drag a piece to move it, drag its red dot to resize, drag its green dot to rotate — or use "Tilt it" / "Straighten" for a quick angle.</li>
       <li>Tap a selected text piece again to edit the words.</li>
       <li>Change a piece's text size (S–XXL), font and colour (invert), and replace a photo any time.</li>
       <li>Turn the photocopier harshness up or down for the whole page, or keep one piece "clean" while the rest gets copied.</li>
       <li>Reorder layers front-to-back, delete a piece, and pick the paper colour.</li>
-      <li>Add pages, switch between them, reorder them, and give each one a title. Everyone signed in can see every page.</li>
+      <li>Add pages, switch between them, reorder them, and give each one a title. Group pages into issues, like folders.</li>
+      <li>Everyone signed in can see every page.</li>
       <li>Everything saves automatically as you work — close the tab and come back any time.</li>
       <li>Save the page as an image to look at or share outside the browser.</li>
+      <li>Export a whole issue as a print-ready PDF, in page order — it downloads straight away and for printers.</li>
+      <li>Mark an issue "Published" to make it visible in the digital flipbook reader on the website.</li>
     </ul>
     <h2>What it can't do (yet)</h2>
     <ul>
@@ -327,6 +341,9 @@ body:not(.authed) #app{display:none}
   var issueTabs = document.getElementById("issueTabs");
   var pageTitleInput = document.getElementById("pageTitle");
   var acctEmail = document.getElementById("acctEmail");
+  var publishToggle = document.getElementById("publishToggle");
+  var exportPdfBtn = document.getElementById("exportPdfBtn");
+  var pdfStatus = document.getElementById("pdfStatus");
 
   authForm.addEventListener("submit", function(ev){
     ev.preventDefault();
@@ -369,9 +386,37 @@ body:not(.authed) #app{display:none}
     document.body.classList.add("authed");
     acctEmail.textContent = user.email || "";
     loadPages();
+    loadIssuesMeta();
   }
 
   // --- issues: pages are grouped by issue_number, like folders. ---
+  var issuesMeta = {}; // issue_number -> row from zine_issues (published flag, pdf_url)
+  function loadIssuesMeta(){
+    return sb.from("zine_issues").select("*").then(function(res){
+      if(res.error){ console.error("couldn't load issue info", res.error); return; }
+      issuesMeta = {};
+      (res.data||[]).forEach(function(row){ issuesMeta[row.issue_number] = row; });
+      updatePublishToggle();
+    });
+  }
+  function updatePublishToggle(){
+    var meta = issuesMeta[currentIssue];
+    publishToggle.checked = !!(meta && meta.published);
+  }
+  publishToggle.addEventListener("change", function(){
+    var n = currentIssue;
+    var published = publishToggle.checked;
+    publishToggle.disabled = true;
+    sb.from("zine_issues").upsert({
+      issue_number: n,
+      published: published,
+      updated_at: new Date().toISOString()
+    }, { onConflict: "issue_number" }).select().single().then(function(res){
+      publishToggle.disabled = false;
+      if(res.error){ alert("Couldn't update: " + res.error.message); publishToggle.checked = !published; return; }
+      issuesMeta[n] = res.data;
+    });
+  });
   function issuesList(){
     var set = {};
     pageRows.forEach(function(p){ set[p.issue_number || 1] = true; });
@@ -391,6 +436,7 @@ body:not(.authed) #app{display:none}
         currentIssue = n;
         renderIssueTabs();
         renderPageList();
+        updatePublishToggle();
         var pages = pagesInIssue(n);
         if(pages[0]) switchToPage(pages[0]);
       });
@@ -400,6 +446,7 @@ body:not(.authed) #app{display:none}
     newBtn.textContent = "+ New issue";
     newBtn.addEventListener("click", createIssue);
     issueTabs.appendChild(newBtn);
+    updatePublishToggle();
   }
 
   // --- pages: list, load, create, reorder, delete ---
@@ -662,7 +709,8 @@ body:not(.authed) #app{display:none}
     arrow:   { clip:"polygon(0% 0%,88% 0%,100% 50%,88% 100%,0% 100%,6% 50%)", font:"anton", bg:"#171510", fg:"#f1ede1", baseCq:3, content:"READ MORE", align:"center", tilt:1.5 },
     ticket:  { clip:"polygon(0% 0%,100% 0%,100% 35%,94% 50%,100% 65%,100% 100%,0% 100%,0% 65%,6% 50%,0% 35%)", font:"typewriter", bg:"#f7f5ee", fg:"#171510", baseCq:2.4, content:"ADMIT ONE — ONE NIGHT ONLY", align:"left", tilt:3 },
     stamp:   { border:"double", font:"anton", bg:"#f7f5ee", fg:"#171510", baseCq:3.6, content:"A+", align:"center", tilt:4.5 },
-    outline: { border:"single", font:"typewriter", bg:"#f7f5ee", fg:"#171510", baseCq:2.6, content:"outlined note", align:"left", tilt:1.8 }
+    outline: { border:"single", font:"typewriter", bg:"#f7f5ee", fg:"#171510", baseCq:2.6, content:"outlined note", align:"left", tilt:1.8 },
+    bolt:    { clip:"polygon(35% 0%, 65% 0%, 45% 40%, 72% 40%, 32% 100%, 42% 55%, 10% 55%)", font:"anton", bg:"#171510", fg:"#f1ede1", baseCq:3.4, content:"ZAP!", align:"center", tilt:5 }
   };
 
   function addEl(type, opts){
@@ -823,7 +871,7 @@ body:not(.authed) #app{display:none}
   }
 
   function labelFor(e){
-    var typeName = { text:"Text", photo:"Photo", rect:"Bar", burst:"Burst", bubble:"Bubble", circle:"Circle", arrow:"Arrow", ticket:"Ticket", stamp:"Stamp", outline:"Note" }[e.type];
+    var typeName = { text:"Text", photo:"Photo", rect:"Bar", burst:"Burst", bubble:"Bubble", circle:"Circle", arrow:"Arrow", ticket:"Ticket", stamp:"Stamp", outline:"Note", bolt:"Bolt" }[e.type];
     var detail = e.type==="photo" ? (e.content?"has image":"empty") : (e.content||"").slice(0,16);
     return typeName+": "+detail+(e.filtered?"":" — clean");
   }
@@ -1131,7 +1179,8 @@ body:not(.authed) #app{display:none}
     arrow:   { x:12, y:10, w:70, h:12 },
     ticket:  { x:12, y:10, w:76, h:14 },
     stamp:   { x:30, y:10, w:34, h:20 },
-    outline: { x:12, y:10, w:76, h:18 }
+    outline: { x:12, y:10, w:76, h:18 },
+    bolt:    { x:34, y:10, w:30, h:30 }
   };
   document.querySelectorAll(".toolbar button[data-add]").forEach(function(btn){
     btn.addEventListener("click", function(){
@@ -1234,6 +1283,70 @@ body:not(.authed) #app{display:none}
       });
     });
   });
+
+  // --- publishing: export every page of the current issue, in order, as a print-ready PDF.
+  // Also uploaded to Supabase Storage so the public flipbook reader can show it once published. ---
+  function pageCanvas(){
+    selectEl(null);
+    return new Promise(function(resolve, reject){
+      requestAnimationFrame(function(){
+        setTimeout(function(){
+          html2canvas(page, { backgroundColor: "#ffffff", scale: 2.5, useCORS: true }).then(resolve).catch(reject);
+        }, 60); // small settle delay for fonts/images after switching pages
+      });
+    });
+  }
+
+  async function exportIssuePdf(){
+    if(typeof html2canvas === "undefined" || !window.jspdf){
+      alert("Couldn't load the PDF export tools — check your connection and try again.");
+      return;
+    }
+    var rows = pagesInIssue(currentIssue);
+    if(rows.length === 0){ alert("This issue has no pages yet."); return; }
+    var returnTo = currentPageRow;
+    exportPdfBtn.disabled = true;
+    var jsPDFlib = window.jspdf.jsPDF;
+    var doc = new jsPDFlib({ unit: "mm", format: "a4", orientation: "portrait" });
+    try{
+      for(var i=0; i<rows.length; i++){
+        pdfStatus.textContent = "Rendering page " + (i+1) + " of " + rows.length + "…";
+        switchToPage(rows[i]);
+        var canvas = await pageCanvas();
+        var img = canvas.toDataURL("image/jpeg", 0.92);
+        if(i > 0) doc.addPage();
+        doc.addImage(img, "JPEG", 0, 0, 210, 297);
+      }
+      pdfStatus.textContent = "Saving…";
+      var blob = doc.output("blob");
+      var filename = "zine-issue-" + currentIssue + ".pdf";
+      saveBlob(blob, filename);
+
+      pdfStatus.textContent = "Uploading for the digital reader…";
+      var path = "issue-" + currentIssue + ".pdf";
+      var upload = await sb.storage.from("zine-pdfs").upload(path, blob, { upsert:true, contentType:"application/pdf" });
+      if(upload.error){ throw upload.error; }
+      var pub = sb.storage.from("zine-pdfs").getPublicUrl(path);
+      var pdfUrl = pub.data.publicUrl;
+      var upsert = await sb.from("zine_issues").upsert({
+        issue_number: currentIssue,
+        pdf_url: pdfUrl,
+        updated_at: new Date().toISOString()
+      }, { onConflict: "issue_number" }).select().single();
+      if(upsert.error){ throw upsert.error; }
+      issuesMeta[currentIssue] = upsert.data;
+      pdfStatus.textContent = "Done — PDF saved and ready for the digital reader.";
+    }catch(err){
+      console.error("PDF export failed", err);
+      pdfStatus.textContent = "";
+      alert("Couldn't finish the PDF export: " + (err && err.message ? err.message : "try again."));
+    }finally{
+      exportPdfBtn.disabled = false;
+      if(returnTo) switchToPage(returnTo);
+      setTimeout(function(){ pdfStatus.textContent = ""; }, 6000);
+    }
+  }
+  exportPdfBtn.addEventListener("click", exportIssuePdf);
 
   fitPage();
   sb.auth.getSession().then(function(res){
