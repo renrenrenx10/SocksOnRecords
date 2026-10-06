@@ -23,7 +23,7 @@
   #bar .pageNum{ font-size:13px; color:#aaa; min-width:52px; text-align:center; }
   #stage{ flex:1 1 auto; position:relative; display:flex; align-items:center; justify-content:center; overflow:hidden; }
   #flipbook{ box-shadow:0 20px 60px rgba(0,0,0,.6); }
-  #flipbook canvas, #flipbook img{ width:100%; height:100%; display:block; background:#fff; }
+  #flipbook canvas, #flipbook img{ width:100%; height:100%; object-fit:contain; display:block; background:#fff; }
   #status{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
     flex-direction:column; gap:14px; text-align:center; padding:30px; }
   #status p{ max-width:360px; color:#bbb; font-size:14px; line-height:1.5; margin:0; }
@@ -151,45 +151,56 @@
     });
   }
 
+  // "stretch" sizing fills the whole stage regardless of the page's actual A4 proportions, which
+  // is what was zooming in and cropping pages. "fixed" sizing with a size we compute ourselves
+  // (preserving the 210/297 ratio, fitted to whatever room is actually available) shows each page
+  // whole. Fixed mode doesn't resize itself, so on window resize we tear down and rebuild at the
+  // new size rather than trying to reflow in place.
   function startFlipbook(images){
     var stage = document.getElementById("stage");
     var ratio = 210/297; // A4 portrait
+    var pageFlip = null;
+
     function sizeFor(){
       var pad = 24;
-      var maxW = stage.clientWidth - pad*2;
-      var maxH = stage.clientHeight - pad*2;
-      var singleW = Math.min(maxW/2, maxH*ratio); // leave room for two-page spread
-      if(singleW < 160){ singleW = Math.min(maxW, maxH*ratio); }
-      var w = Math.max(140, singleW);
-      var h = w / ratio;
-      return { w: Math.round(w), h: Math.round(h) };
+      var maxW = Math.max(100, stage.clientWidth - pad*2);
+      var maxH = Math.max(100, stage.clientHeight - pad*2);
+      var singleW = Math.min(maxW/2, maxH*ratio); // leave room for a two-page spread
+      if(singleW < 160){ singleW = Math.min(maxW, maxH*ratio); } // too narrow for a spread -- show one page
+      var w = Math.max(140, Math.floor(singleW));
+      var h = Math.floor(w / ratio);
+      return { w: w, h: h };
     }
-    var size = sizeFor();
-
-    var pageFlip = new St.PageFlip(flipbookEl, {
-      width: size.w,
-      height: size.h,
-      size: "stretch",
-      minWidth: 140,
-      maxWidth: 900,
-      minHeight: 200,
-      maxHeight: 1273,
-      showCover: false,
-      usePortrait: true,
-      maxShadowOpacity: 0.5,
-      mobileScrollSupport: true
-    });
-    pageFlip.loadFromImages(images);
 
     function updateNav(){
+      if(!pageFlip) return;
       var cur = pageFlip.getCurrentPageIndex();
       var total = pageFlip.getPageCount();
       pageNumEl.textContent = (cur+1) + " / " + total;
       prevBtn.disabled = cur <= 0;
       nextBtn.disabled = cur >= total-1;
     }
-    pageFlip.on("flip", updateNav);
-    updateNav();
+
+    function build(){
+      var wasOpen = pageFlip ? pageFlip.getCurrentPageIndex() : 0;
+      if(pageFlip){ try{ pageFlip.destroy(); }catch(err){} }
+      flipbookEl.innerHTML = "";
+      var size = sizeFor();
+      pageFlip = new St.PageFlip(flipbookEl, {
+        width: size.w,
+        height: size.h,
+        size: "fixed",
+        showCover: false,
+        usePortrait: true,
+        maxShadowOpacity: 0.5,
+        mobileScrollSupport: true
+      });
+      pageFlip.loadFromImages(images);
+      pageFlip.on("flip", updateNav);
+      if(wasOpen > 0 && pageFlip.flip) pageFlip.flip(wasOpen);
+      updateNav();
+    }
+    build();
 
     prevBtn.addEventListener("click", function(){ pageFlip.flipPrev(); });
     nextBtn.addEventListener("click", function(){ pageFlip.flipNext(); });
@@ -198,9 +209,10 @@
       if(e.key === "ArrowLeft") pageFlip.flipPrev();
     });
 
+    var resizeTimer = null;
     window.addEventListener("resize", function(){
-      var s = sizeFor();
-      pageFlip.update ? pageFlip.update() : null;
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(build, 200);
     });
   }
 })();
