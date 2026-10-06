@@ -588,6 +588,14 @@ body:not(.authed) #app{display:none}
     if(r.bandcamp_url) lines.push(r.bandcamp_url);
     return lines.join("\n");
   }
+  // Text and cover are always added as separate, independently movable/resizable pieces -- never
+  // combined into one element -- stacked with a sensible default position so they don't land on
+  // top of each other, but you can drag either one anywhere afterwards.
+  function addReleaseText(r){ addEl("text", { content: formatReleaseText(r) }); }
+  function addReleaseCover(r){
+    if(!r.cover_url){ alert("This release doesn't have cover art."); return; }
+    addEl("photo", Object.assign({}, ADD_DEFAULTS.photo, { content: r.cover_url }));
+  }
   function renderReleaseList(releases){
     var releaseList = document.getElementById("releaseList");
     releaseList.innerHTML = "";
@@ -597,11 +605,26 @@ body:not(.authed) #app{display:none}
       var btn = document.createElement("button");
       btn.className = "name";
       btn.textContent = (r.released_text || r.released_date || "") + " — " + (r.title || "Release") + (r.artist_text ? " (" + r.artist_text + ")" : "");
-      btn.addEventListener("click", function(){
-        addEl("text", { content: formatReleaseText(r) });
+      btn.title = "Add text only";
+      btn.addEventListener("click", function(){ addReleaseText(r); closeDrawer(); });
+      row.appendChild(btn);
+
+      var coverBtn = document.createElement("button");
+      coverBtn.className = "mini"; coverBtn.title = "Add cover art only"; coverBtn.textContent = "🖼";
+      coverBtn.addEventListener("click", function(){ addReleaseCover(r); closeDrawer(); });
+      row.appendChild(coverBtn);
+
+      var bothBtn = document.createElement("button");
+      bothBtn.className = "mini"; bothBtn.title = "Add cover + text as two pieces"; bothBtn.textContent = "🖼+T";
+      bothBtn.addEventListener("click", function(){
+        if(!r.cover_url){ alert("This release doesn't have cover art."); return; }
+        // explicit non-overlapping positions so the two pieces don't land stacked on top of each other
+        addEl("photo", { x:15, y:8, w:55, h:34, content:r.cover_url });
+        addEl("text", { x:15, y:46, w:65, h:22, content: formatReleaseText(r) });
         closeDrawer();
       });
-      row.appendChild(btn);
+      row.appendChild(bothBtn);
+
       releaseList.appendChild(row);
     });
   }
