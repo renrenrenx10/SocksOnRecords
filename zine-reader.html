@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Fanzine Reader</title>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/page-flip@2.0.7/dist/js/page-flip.browser.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root{ color-scheme: dark; }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; height:100%; height:100dvh; background:#111; color:#eee;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif; overflow:hidden; }
+  #wrap{ position:fixed; inset:0; display:flex; flex-direction:column; }
+  #bar{ display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:10px 14px; background:#191919; border-bottom:1px solid #2c2c2c; flex:0 0 auto; z-index:5; }
+  #bar h1{ font-size:15px; margin:0; font-weight:600; color:#f1ede1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #bar .nav{ display:flex; gap:8px; align-items:center; }
+  #bar button{ background:#2a2a2a; color:#eee; border:1px solid #3a3a3a; border-radius:8px;
+    padding:8px 12px; font-size:14px; cursor:pointer; }
+  #bar button:disabled{ opacity:.35; cursor:default; }
+  #bar .pageNum{ font-size:13px; color:#aaa; min-width:52px; text-align:center; }
+  #stage{ flex:1 1 auto; position:relative; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+  #flipbook{ box-shadow:0 20px 60px rgba(0,0,0,.6); }
+  #flipbook canvas, #flipbook img{ width:100%; height:100%; display:block; background:#fff; }
+  #status{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    flex-direction:column; gap:14px; text-align:center; padding:30px; }
+  #status p{ max-width:360px; color:#bbb; font-size:14px; line-height:1.5; margin:0; }
+  #status .spinner{ width:34px; height:34px; border-radius:50%; border:3px solid #333; border-top-color:#e8572c; animation:spin 0.9s linear infinite; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  #status.hidden{ display:none; }
+  a.homeLink{ color:#e8572c; text-decoration:none; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="bar">
+    <h1 id="issueTitle">Fanzine</h1>
+    <div class="nav">
+      <button id="prevBtn" aria-label="Previous page">‹</button>
+      <span class="pageNum" id="pageNum">–</span>
+      <button id="nextBtn" aria-label="Next page">›</button>
+    </div>
+  </div>
+  <div id="stage">
+    <div id="flipbook" hidden></div>
+    <div id="status">
+      <div class="spinner" id="spinner"></div>
+      <p id="statusText">Loading issue…</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var SUPABASE_URL = "https://xnbkdgmojfupjerqorcw.supabase.co";
+  var SUPABASE_KEY = "sb_publishable__XrZLQTrqwf9xeLBn5xI7w_vVgFJzCf";
+  var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+
+  var statusEl = document.getElementById("status");
+  var statusText = document.getElementById("statusText");
+  var spinner = document.getElementById("spinner");
+  var flipbookEl = document.getElementById("flipbook");
+  var issueTitleEl = document.getElementById("issueTitle");
+  var pageNumEl = document.getElementById("pageNum");
+  var prevBtn = document.getElementById("prevBtn");
+  var nextBtn = document.getElementById("nextBtn");
+
+  function fail(message, opts){
+    spinner.style.display = "none";
+    statusText.innerHTML = message;
+    if(opts && opts.showHome){
+      var a = document.createElement("a");
+      a.href = "/";
+      a.className = "homeLink";
+      a.textContent = "← Back to Socks On Records";
+      statusText.appendChild(document.createElement("br"));
+      statusText.appendChild(a);
+    }
+  }
+
+  var params = new URLSearchParams(location.search);
+  var issueNumber = parseInt(params.get("issue"), 10);
+  if(!issueNumber || issueNumber < 1){
+    fail("No issue specified. Add <code>?issue=1</code> to the link to open an issue.");
+  } else {
+    issueTitleEl.textContent = "Issue " + issueNumber;
+    loadIssue(issueNumber);
+  }
+
+  function loadIssue(n){
+    sb.from("zine_issues").select("*").eq("issue_number", n).eq("published", true).maybeSingle()
+      .then(function(res){
+        if(res.error){ fail("Couldn't load this issue right now. Try again shortly."); return; }
+        var row = res.data;
+        if(!row || !row.pdf_url){
+          fail("Issue " + n + " isn't available yet.", { showHome:true });
+          return;
+        }
+        if(row.title){ issueTitleEl.textContent = row.title; }
+        statusText.textContent = "Rendering pages…";
+        renderPdfToFlipbook(row.pdf_url);
+      });
+  }
+
+  function renderPdfToFlipbook(url){
+    pdfjsLib.getDocument(url).promise.then(function(pdf){
+      var pageCount = pdf.numPages;
+      var images = [];
+      var scale = Math.min(2.2, Math.max(1.4, window.devicePixelRatio || 1.5));
+
+      function renderPage(i){
+        return pdf.getPage(i).then(function(page){
+          var viewport = page.getViewport({ scale: scale });
+          var canvas = document.createElement("canvas");
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          var ctx = canvas.getContext("2d");
+          return page.render({ canvasContext: ctx, viewport: viewport }).promise.then(function(){
+            images.push(canvas.toDataURL("image/jpeg", 0.88));
+          });
+        });
+      }
+
+      var chain = Promise.resolve();
+      for(var i=1; i<=pageCount; i++){
+        (function(pageIndex){
+          chain = chain.then(function(){
+            statusText.textContent = "Rendering page " + pageIndex + " of " + pageCount + "…";
+            return renderPage(pageIndex);
+          });
+        })(i);
+      }
+
+      chain.then(function(){
+        statusEl.classList.add("hidden");
+        flipbookEl.hidden = false;
+        startFlipbook(images);
+      }).catch(function(err){
+        console.error(err);
+        fail("Something went wrong rendering this issue.");
+      });
+    }).catch(function(err){
+      console.error(err);
+      fail("Couldn't open the PDF for this issue.");
+    });
+  }
+
+  function startFlipbook(images){
+    var stage = document.getElementById("stage");
+    var ratio = 210/297; // A4 portrait
+    function sizeFor(){
+      var pad = 24;
+      var maxW = stage.clientWidth - pad*2;
+      var maxH = stage.clientHeight - pad*2;
+      var singleW = Math.min(maxW/2, maxH*ratio); // leave room for two-page spread
+      if(singleW < 160){ singleW = Math.min(maxW, maxH*ratio); }
+      var w = Math.max(140, singleW);
+      var h = w / ratio;
+      return { w: Math.round(w), h: Math.round(h) };
+    }
+    var size = sizeFor();
+
+    var pageFlip = new St.PageFlip(flipbookEl, {
+      width: size.w,
+      height: size.h,
+      size: "stretch",
+      minWidth: 140,
+      maxWidth: 900,
+      minHeight: 200,
+      maxHeight: 1273,
+      showCover: false,
+      usePortrait: true,
+      maxShadowOpacity: 0.5,
+      mobileScrollSupport: true
+    });
+    pageFlip.loadFromImages(images);
+
+    function updateNav(){
+      var cur = pageFlip.getCurrentPageIndex();
+      var total = pageFlip.getPageCount();
+      pageNumEl.textContent = (cur+1) + " / " + total;
+      prevBtn.disabled = cur <= 0;
+      nextBtn.disabled = cur >= total-1;
+    }
+    pageFlip.on("flip", updateNav);
+    updateNav();
+
+    prevBtn.addEventListener("click", function(){ pageFlip.flipPrev(); });
+    nextBtn.addEventListener("click", function(){ pageFlip.flipNext(); });
+    document.addEventListener("keydown", function(e){
+      if(e.key === "ArrowRight") pageFlip.flipNext();
+      if(e.key === "ArrowLeft") pageFlip.flipPrev();
+    });
+
+    window.addEventListener("resize", function(){
+      var s = sizeFor();
+      pageFlip.update ? pageFlip.update() : null;
+    });
+  }
+})();
+</script>
+</body>
+</html>
