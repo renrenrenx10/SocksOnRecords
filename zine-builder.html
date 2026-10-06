@@ -1,0 +1,1358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Zine Page Builder</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Old+Standard+TT:ital,wght@0,400;0,700;1,400&family=Permanent+Marker&family=Anton&family=Rock+Salt&family=Courier+Prime:wght@400;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+/* app shell: fixed header + a canvas that is measured in JS and sized to fill whatever space is left
+   (height-constrained on a phone, width-constrained on a tall desktop window) -- never fought over with
+   CSS percentages. Everything that isn't the canvas itself (add-shape, page settings, layers) lives in a
+   drawer that overlays the canvas and takes zero permanent layout space; picking a shape closes it
+   automatically so you land straight back on the canvas with the new piece selected. */
+:root{
+  --bg:#eeeae1; --fg:#201e1a; --mut:#6b6659; --line:#201e1a;
+  --accent:#b33a2e; --card:#f7f4ec;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){ --bg:#17160f; --fg:#eee9dc; --mut:#aaa38f; --line:#eee9dc; --card:#221f17; color-scheme:dark; }
+}
+:root[data-theme="dark"]{ --bg:#17160f; --fg:#eee9dc; --mut:#aaa38f; --line:#eee9dc; --card:#221f17; color-scheme:dark; }
+
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100vh;height:100dvh}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;overflow:hidden;display:flex;justify-content:center}
+
+#app{width:100%;max-width:480px;height:100%;display:flex;flex-direction:column;padding-inline:14px;min-width:0}
+
+#topbar{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:8px;padding-block:calc(10px + env(safe-area-inset-top,0px)) 8px;border-bottom:1.5px solid var(--line)}
+#topbar h1{font-weight:700;font-size:16px;margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#topbar .tbtns{display:flex;gap:5px;flex:0 0 auto}
+#menuBtn,#aboutBtn{font-weight:700;font-size:11px;background:var(--card);border:1.5px solid var(--line);color:var(--fg);padding:7px 8px;cursor:pointer;white-space:nowrap}
+#saveBtn{font-weight:700;font-size:11px;background:var(--accent);border:1.5px solid var(--accent);color:#fff;padding:7px 8px;cursor:pointer;white-space:nowrap}
+#saveBtn:disabled{opacity:.6}
+
+#authGate{position:fixed;inset:0;z-index:60;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px}
+body.authed #authGate{display:none}
+body:not(.authed) #app{display:none}
+.authCard{max-width:340px;width:100%;text-align:center}
+.authCard h1{font-weight:700;font-size:22px;margin:0 0 8px}
+.authCard p{font-size:14px;color:var(--mut);margin:0 0 18px;line-height:1.5}
+#authForm{display:flex;flex-direction:column;gap:10px}
+#authForm input{font:15px/1.4 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;padding:10px 12px;border:1.5px solid var(--line);background:var(--card);color:var(--fg)}
+#authForm button{font-weight:700;font-size:13px;background:var(--accent);border:1.5px solid var(--accent);color:#fff;padding:10px;cursor:pointer}
+#authForm button:disabled{opacity:.6}
+#authError{color:var(--accent);font-size:13px;margin:10px 0 0}
+
+#canvasWrap{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;padding:12px 0;position:relative}
+.page{position:relative;background:#f3efe2;aspect-ratio:210/297;overflow:hidden;touch-action:none;transition:background .25s;box-shadow:0 2px 10px rgba(0,0,0,.25);container-type:inline-size;container-name:page}
+.page:empty::after{content:"Blank page — tap ☰ Menu to add your first piece";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:14%;color:#9a9381;font-size:14px;line-height:1.5;pointer-events:none}
+.page.stock-pink{background:#f1dde0}
+.page.stock-green{background:#dde7d6}
+.page.stock-yellow{background:#f2eac4}
+.page.stock-white{background:#f3efe2}
+
+#selectionBar{flex:0 0 auto;border-top:1.5px solid var(--line);background:var(--card);padding:8px 0 calc(8px + env(safe-area-inset-bottom,0px))}
+#selectionBar[hidden]{display:none}
+
+.selbar{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 6px;min-height:30px}
+.selbar button{font-weight:700;font-size:11px;background:#1d1b16;color:#efe9d8;border:none;padding:7px 10px;cursor:pointer}
+.selbar button.danger{background:var(--accent)}
+.selbar button[aria-pressed="true"]{outline:2px solid var(--accent);outline-offset:-2px}
+.selbar select{font-weight:700;font-size:11px;background:#1d1b16;color:#efe9d8;border:none;padding:7px 8px;cursor:pointer}
+.selrow{display:flex;flex-wrap:wrap;gap:6px}
+
+/* .el is just the draggable/rotatable hit-box: no clipping, so the resize/rotate handles
+   (positioned outside its edge) are never cropped even on odd, clip-path-shaped pieces.
+   .shape is the inner visual card: background, clip-path, border, font, text -- all live here. */
+.el{position:absolute;box-sizing:border-box;cursor:grab}
+.el.dragging{cursor:grabbing}
+.shape{position:absolute;inset:0;box-sizing:border-box;display:flex;align-items:center;justify-content:center;text-align:center;padding:4%;overflow:hidden;line-height:1.25}
+.el.text .shape,.el.bubble .shape,.el.ticket .shape{text-align:left;display:block}
+.shape[contenteditable="true"]{cursor:text;outline:1.5px dashed var(--accent);outline-offset:1px}
+.el.photo .shape{overflow:hidden;padding:0}
+.el.photo .shape img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+.el.photo .add{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:700 2.6cqw "Courier Prime",monospace;color:#6b6659;text-align:center;pointer-events:none}
+.el.selected .shape{outline:1.5px solid var(--accent);outline-offset:1px}
+.handle{position:absolute;width:28px;height:28px;border:2px solid var(--bg);border-radius:50%;cursor:nwse-resize;display:none;font-size:13px;align-items:center;justify-content:center;color:#fff;line-height:1;touch-action:none;z-index:5}
+.handle.resize{right:-13px;bottom:-13px;background:var(--accent)}
+.handle.rotate{left:50%;top:-36px;transform:translateX(-50%);background:#2e6b4f;cursor:grab}
+.el.selected .handle{display:flex}
+
+/* drawer */
+#backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:opacity .2s;z-index:40}
+#backdrop.open{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;max-height:76vh;background:var(--bg);border-top:2px solid var(--line);border-radius:14px 14px 0 0;
+  transform:translateY(100%);transition:transform .25s ease;z-index:41;display:flex;flex-direction:column;
+  padding-bottom:env(safe-area-inset-bottom,0px);box-shadow:0 -4px 18px rgba(0,0,0,.3)}
+.sheet.open{transform:translateY(0)}
+.drawerHead{flex:0 0 auto;display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1.5px solid var(--line)}
+.drawerHead strong{font-weight:700;font-size:16px}
+.drawerHead button{font-weight:700;font-size:12px;background:none;border:1.5px solid var(--line);color:var(--fg);padding:6px 10px;cursor:pointer}
+.drawerBody{overflow-y:auto;padding:14px;-webkit-overflow-scrolling:touch}
+.drawerBody section{margin:0 0 20px}
+.drawerBody section:last-child{margin-bottom:4px}
+.drawerBody h2{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:0 0 8px}
+.drawerHint{font-size:12px;color:var(--mut);margin:0 0 16px;line-height:1.5}
+
+.ctl{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 10px}
+.ctl span.lbl{font-size:11.5px;color:var(--mut)}
+.ctl button{font-weight:700;font-size:12px;background:none;border:1.5px solid var(--line);color:var(--fg);padding:5px 9px;cursor:pointer}
+.ctl button[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
+.swatch{width:18px;height:18px;border:1.5px solid var(--line);padding:0;cursor:pointer}
+.swatch[aria-pressed="true"]{outline:2px solid var(--accent);outline-offset:1px}
+.row{display:flex;align-items:center;gap:8px;font-size:13px;margin:0;color:var(--mut)}
+.row input[type=range]{flex:1}
+
+.toolbar{display:flex;flex-wrap:wrap;gap:6px}
+.toolbar button{flex:1 1 30%;min-width:84px;font-weight:700;font-size:11px;background:var(--card);border:1.5px solid var(--line);color:var(--fg);padding:8px 4px;cursor:pointer}
+.toolbar button:active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+.layerrow{display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid rgba(0,0,0,.08)}
+.layerrow:last-child{border-bottom:none}
+.layerrow button.name{flex:1;text-align:left;background:none;border:none;color:var(--fg);font-weight:700;font-size:12px;cursor:pointer;padding:3px 0}
+.layerrow.active button.name{color:var(--accent)}
+.layerrow button.mini{font-size:14px;background:none;border:1px solid var(--line);color:var(--fg);width:26px;height:26px;cursor:pointer;line-height:1}
+.empty-layers{font-size:12px;color:var(--mut)}
+
+.aboutBody p{margin:0 0 10px;font-size:13px;line-height:1.55}
+.aboutBody ul{margin:0 0 18px;padding-left:20px;font-size:13px;line-height:1.6}
+.aboutBody li{margin:0 0 4px}
+.aboutBody h2{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:0 0 8px}
+</style>
+</head>
+<body>
+
+<div id="authGate">
+  <div class="authCard">
+    <h1>Zine Page Builder</h1>
+    <p>Sign in with your Socks On Records login — pages are shared and saved automatically.</p>
+    <form id="authForm">
+      <input type="email" id="authEmail" placeholder="you@email.com" required autocomplete="email">
+      <input type="password" id="authPassword" placeholder="Password" required autocomplete="current-password">
+      <button type="submit" id="authSubmit">Sign in</button>
+    </form>
+    <p id="authError" hidden></p>
+  </div>
+</div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="copier" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+    <feColorMatrix type="saturate" values="0"/>
+    <feGaussianBlur id="fBlur" stdDeviation="0.35" result="g"/>
+    <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="7" result="n"/>
+    <feColorMatrix in="n" type="matrix" values="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 0 0 0 0 1" result="nn"/>
+    <feComposite id="fComp" in="g" in2="nn" operator="arithmetic" k1="0" k2="1" k3="0.18" k4="-0.09" result="m"/>
+    <feComponentTransfer id="fXfer">
+      <feFuncR type="linear" slope="1.35" intercept="-0.18"/>
+      <feFuncG type="linear" slope="1.35" intercept="-0.18"/>
+      <feFuncB type="linear" slope="1.35" intercept="-0.18"/>
+    </feComponentTransfer>
+    <feComponentTransfer>
+      <feFuncR id="tR" type="table" tableValues="0.09 0.96"/>
+      <feFuncG id="tG" type="table" tableValues="0.09 0.95"/>
+      <feFuncB id="tB" type="table" tableValues="0.1 0.9"/>
+    </feComponentTransfer>
+  </filter>
+</svg>
+
+<div id="app">
+  <div id="topbar">
+    <h1>Zine Page Builder</h1>
+    <div class="tbtns">
+      <button id="saveBtn">⬇ Save</button>
+      <button id="aboutBtn">? About</button>
+      <button id="menuBtn">☰ Menu</button>
+    </div>
+  </div>
+
+  <div id="canvasWrap">
+    <div class="page stock-white" id="page"></div>
+  </div>
+
+  <div id="selectionBar" hidden>
+    <div class="selbar" id="selbar"></div>
+    <div class="selrow" id="selrow"></div>
+  </div>
+</div>
+
+<div id="backdrop"></div>
+<div id="drawer" class="sheet">
+  <div class="drawerHead">
+    <strong>Menu</strong>
+    <button id="drawerClose">Close</button>
+  </div>
+  <div class="drawerBody">
+    <p class="drawerHint">Drag a piece's body to move it, the red dot to resize, the green dot above it to rotate. Tap a selected text-bearing piece again to type.</p>
+
+    <section>
+      <h2>Issue</h2>
+      <div class="ctl" id="issueTabs"></div>
+      <div class="ctl" style="margin-top:8px;align-items:center">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px">
+          <input type="checkbox" id="publishToggle"> Published (visible in the digital reader)
+        </label>
+      </div>
+      <div class="ctl" style="margin-top:8px">
+        <button id="exportPdfBtn">📄 Export issue as PDF</button>
+      </div>
+      <p id="pdfStatus" class="mini-note" style="margin:4px 0 0;min-height:1em"></p>
+      <h2 style="margin-top:14px">Pages</h2>
+      <div id="pageList"></div>
+      <div class="ctl" style="margin-top:8px">
+        <button id="addPageBtn">+ Add page</button>
+      </div>
+      <label class="row" style="margin-top:10px">
+        <span class="lbl">Title</span>
+        <input type="text" id="pageTitle" placeholder="(untitled)" style="flex:1;font:inherit;background:none;border:1.5px solid var(--line);color:var(--fg);padding:5px 8px">
+      </label>
+    </section>
+
+    <section>
+      <h2>Add a shape</h2>
+      <div class="toolbar">
+        <button data-add="text">+ Text scrap</button>
+        <button data-add="photo">+ Image</button>
+        <button data-add="rect">+ Headline bar</button>
+        <button data-add="burst">+ Burst</button>
+        <button data-add="bubble">+ Speech bubble</button>
+        <button data-add="circle">+ Circle badge</button>
+        <button data-add="arrow">+ Arrow banner</button>
+        <button data-add="ticket">+ Ticket stub</button>
+        <button data-add="stamp">+ Stamp</button>
+        <button data-add="outline">+ Outlined note</button>
+        <button data-add="bolt">+ Lightning bolt</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Page settings</h2>
+      <div class="ctl">
+        <span class="lbl">Paper</span>
+        <button class="swatch" data-stock="white" style="background:#f3efe2" aria-pressed="true" aria-label="White"></button>
+        <button class="swatch" data-stock="pink" style="background:#f1dde0" aria-pressed="false" aria-label="Pink"></button>
+        <button class="swatch" data-stock="green" style="background:#dde7d6" aria-pressed="false" aria-label="Green"></button>
+        <button class="swatch" data-stock="yellow" style="background:#f2eac4" aria-pressed="false" aria-label="Yellow"></button>
+      </div>
+      <div class="ctl">
+        <button id="cleanToggle" aria-pressed="false">Show clean (no copier)</button>
+      </div>
+      <label class="row">Harshness
+        <input type="range" id="harsh" min="0" max="100" value="22">
+        <span id="harshVal">22</span>
+      </label>
+    </section>
+
+    <section>
+      <h2>Layers, front to back</h2>
+      <div id="layerList"></div>
+    </section>
+
+    <section>
+      <h2>Account</h2>
+      <div class="ctl">
+        <span class="lbl" id="acctEmail"></span>
+      </div>
+      <div class="ctl">
+        <button id="signOutBtn">Sign out</button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div id="aboutPanel" class="sheet">
+  <div class="drawerHead">
+    <strong>About this builder</strong>
+    <button id="aboutClose">Close</button>
+  </div>
+  <div class="drawerBody aboutBody">
+    <h2>What you can do</h2>
+    <ul>
+      <li>Add text scraps, a photo, a headline bar, a burst, a speech bubble, a circle badge, an arrow banner, a ticket stub, a stamp, an outlined note or a lightning bolt.</li>
+      <li>Drag a piece to move it, drag its red dot to resize, drag its green dot to rotate — or use "Tilt it" / "Straighten" for a quick angle.</li>
+      <li>Tap a selected text piece again to edit the words.</li>
+      <li>Change a piece's text size (S–XXL), font and colour (invert), and replace a photo any time.</li>
+      <li>Turn the photocopier harshness up or down for the whole page, or keep one piece "clean" while the rest gets copied.</li>
+      <li>Reorder layers front-to-back, delete a piece, and pick the paper colour.</li>
+      <li>Add pages, switch between them, reorder them, and give each one a title. Group pages into issues, like folders.</li>
+      <li>Everyone signed in can see every page.</li>
+      <li>Everything saves automatically as you work — close the tab and come back any time.</li>
+      <li>Save the page as an image to look at or share outside the browser.</li>
+      <li>Export a whole issue as a print-ready PDF, in page order — it downloads straight away and for printers.</li>
+      <li>Mark an issue "Published" to make it visible in the digital flipbook reader on the website.</li>
+    </ul>
+    <h2>What it can't do (yet)</h2>
+    <ul>
+      <li>No undo — if you delete something or mess up a piece, you'll need to re-add it.</li>
+      <li>You can only edit or delete your own pages — someone else's page is read-only to you.</li>
+      <li>No spreads yet — each page is a single side.</li>
+      <li>Very long text in a small piece will just get clipped, not shrunk to fit.</li>
+      <li>No multi-select — pieces are moved and resized one at a time.</li>
+      <li>The saved image is a best-effort snapshot — the photocopy filter sometimes doesn't carry over perfectly.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var page = document.getElementById("page");
+  var canvasWrap = document.getElementById("canvasWrap");
+  var selectionBar = document.getElementById("selectionBar");
+  var selbar = document.getElementById("selbar");
+  var selrow = document.getElementById("selrow");
+  var layerList = document.getElementById("layerList");
+  var drawer = document.getElementById("drawer");
+  var backdrop = document.getElementById("backdrop");
+  var els = []; // {id,type,x,y,w,h,rot,content,filtered,font,size,inverted}
+  var domMap = {}; // id -> div
+  var zTop = 1;
+  var selectedId = null;
+  var globalClean = false;
+
+  function uid(){ return Math.random().toString(36).slice(2,9); }
+  function byId(id){ return els.find(function(x){ return x.id===id; }); }
+  function rnd(min,max){ return min + Math.random()*(max-min); }
+
+  // --- Supabase: pages are shared with, and saved through, the same project as the
+  // Socks On Records site, so contributor logins are the same accounts. ---
+  var SUPABASE_URL = "https://xnbkdgmojfupjerqorcw.supabase.co";
+  var SUPABASE_KEY = "sb_publishable__XrZLQTrqwf9xeLBn5xI7w_vVgFJzCf";
+  var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  var currentUser = null;
+  var currentPageRow = null; // the zine_pages row currently loaded into the canvas
+  var currentIssue = 1;      // which issue's pages are shown in the Pages list
+  var pageRows = [];         // every page, across every issue
+  var profileCache = {};     // user id -> display name, filled in as pages are loaded
+  var saveTimer = null;
+  var suppressSave = false;  // true while hydrating a page from the DB, so loading never re-triggers a save
+
+  var authGate = document.getElementById("authGate");
+  var authForm = document.getElementById("authForm");
+  var authEmail = document.getElementById("authEmail");
+  var authPassword = document.getElementById("authPassword");
+  var authSubmit = document.getElementById("authSubmit");
+  var authError = document.getElementById("authError");
+  var pageList = document.getElementById("pageList");
+  var issueTabs = document.getElementById("issueTabs");
+  var pageTitleInput = document.getElementById("pageTitle");
+  var acctEmail = document.getElementById("acctEmail");
+  var publishToggle = document.getElementById("publishToggle");
+  var exportPdfBtn = document.getElementById("exportPdfBtn");
+  var pdfStatus = document.getElementById("pdfStatus");
+
+  authForm.addEventListener("submit", function(ev){
+    ev.preventDefault();
+    var email = authEmail.value.trim();
+    var password = authPassword.value;
+    if(!email || !password) return;
+    authSubmit.disabled = true;
+    authSubmit.textContent = "Signing in…";
+    authError.hidden = true;
+    sb.auth.signInWithPassword({ email: email, password: password }).then(function(res){
+      authSubmit.disabled = false;
+      authSubmit.textContent = "Sign in";
+      if(res.error){
+        authError.textContent = res.error.message || "Couldn't sign in — check your email and password.";
+        authError.hidden = false;
+      }
+      // success is picked up by onAuthStateChange below
+    });
+  });
+
+  document.getElementById("signOutBtn").addEventListener("click", function(){
+    flushSave();
+    sb.auth.signOut();
+  });
+
+  sb.auth.onAuthStateChange(function(event, session){
+    if(session && session.user){
+      onSignedIn(session.user);
+    } else {
+      currentUser = null;
+      currentPageRow = null;
+      document.body.classList.remove("authed");
+      authPassword.value = "";
+    }
+  });
+
+  function onSignedIn(user){
+    if(currentUser && currentUser.id === user.id) return;
+    currentUser = user;
+    document.body.classList.add("authed");
+    acctEmail.textContent = user.email || "";
+    loadPages();
+    loadIssuesMeta();
+  }
+
+  // --- issues: pages are grouped by issue_number, like folders. ---
+  var issuesMeta = {}; // issue_number -> row from zine_issues (published flag, pdf_url)
+  function loadIssuesMeta(){
+    return sb.from("zine_issues").select("*").then(function(res){
+      if(res.error){ console.error("couldn't load issue info", res.error); return; }
+      issuesMeta = {};
+      (res.data||[]).forEach(function(row){ issuesMeta[row.issue_number] = row; });
+      updatePublishToggle();
+    });
+  }
+  function updatePublishToggle(){
+    var meta = issuesMeta[currentIssue];
+    publishToggle.checked = !!(meta && meta.published);
+  }
+  publishToggle.addEventListener("change", function(){
+    var n = currentIssue;
+    var published = publishToggle.checked;
+    publishToggle.disabled = true;
+    sb.from("zine_issues").upsert({
+      issue_number: n,
+      published: published,
+      updated_at: new Date().toISOString()
+    }, { onConflict: "issue_number" }).select().single().then(function(res){
+      publishToggle.disabled = false;
+      if(res.error){ alert("Couldn't update: " + res.error.message); publishToggle.checked = !published; return; }
+      issuesMeta[n] = res.data;
+    });
+  });
+  function issuesList(){
+    var set = {};
+    pageRows.forEach(function(p){ set[p.issue_number || 1] = true; });
+    return Object.keys(set).map(Number).sort(function(a,b){ return a-b; });
+  }
+  function pagesInIssue(n){
+    return pageRows.filter(function(p){ return (p.issue_number||1) === n; })
+      .sort(function(a,b){ return a.page_order - b.page_order; });
+  }
+  function renderIssueTabs(){
+    issueTabs.innerHTML = "";
+    issuesList().forEach(function(n){
+      var b = document.createElement("button");
+      b.textContent = "Issue " + n;
+      b.setAttribute("aria-pressed", String(n===currentIssue));
+      b.addEventListener("click", function(){
+        currentIssue = n;
+        renderIssueTabs();
+        renderPageList();
+        updatePublishToggle();
+        var pages = pagesInIssue(n);
+        if(pages[0]) switchToPage(pages[0]);
+      });
+      issueTabs.appendChild(b);
+    });
+    var newBtn = document.createElement("button");
+    newBtn.textContent = "+ New issue";
+    newBtn.addEventListener("click", createIssue);
+    issueTabs.appendChild(newBtn);
+    updatePublishToggle();
+  }
+
+  // --- pages: list, load, create, reorder, delete ---
+  function loadPages(){
+    sb.from("zine_pages").select("*").order("page_order", { ascending:true }).then(function(res){
+      if(res.error){ alert("Couldn't load pages: " + res.error.message); return; }
+      pageRows = res.data || [];
+      if(pageRows.length === 0){ createPage(); return; }
+      var authorIds = pageRows.map(function(p){ return p.created_by; }).filter(Boolean);
+      loadProfiles(authorIds).then(function(){
+        var keep = currentPageRow && pageRows.filter(function(p){ return p.id===currentPageRow.id; })[0];
+        var startRow = keep || pageRows[0];
+        currentIssue = startRow.issue_number || 1;
+        renderIssueTabs();
+        renderPageList();
+        switchToPage(startRow);
+      });
+    });
+  }
+
+  function loadProfiles(ids){
+    var missing = ids.filter(function(id){ return id && !(id in profileCache); });
+    if(missing.length === 0) return Promise.resolve();
+    return sb.from("profiles").select("id,display_name,email").in("id", missing).then(function(res){
+      (res.data||[]).forEach(function(p){ profileCache[p.id] = p.display_name || (p.email||"").split("@")[0] || "someone"; });
+    });
+  }
+
+  function authorLabel(userId){
+    if(currentUser && userId === currentUser.id) return "you";
+    return profileCache[userId] || "someone";
+  }
+
+  function renderPageList(){
+    pageList.innerHTML = "";
+    var rows = pagesInIssue(currentIssue);
+    rows.forEach(function(row, i){
+      var r = document.createElement("div");
+      r.className = "layerrow" + (currentPageRow && row.id===currentPageRow.id ? " active" : "");
+      var nameBtn = document.createElement("button");
+      nameBtn.className = "name";
+      nameBtn.textContent = "Page " + (i+1) + (row.title ? " — " + row.title : "") + " · " + authorLabel(row.created_by);
+      nameBtn.addEventListener("click", function(){ switchToPage(row); closeDrawer(); });
+      r.appendChild(nameBtn);
+
+      if(i > 0){
+        var upBtn = document.createElement("button");
+        upBtn.className = "mini"; upBtn.title = "Move earlier"; upBtn.textContent = "↑";
+        upBtn.addEventListener("click", function(){ movePage(rows, i, -1); });
+        r.appendChild(upBtn);
+      }
+      if(i < rows.length-1){
+        var downBtn = document.createElement("button");
+        downBtn.className = "mini"; downBtn.title = "Move later"; downBtn.textContent = "↓";
+        downBtn.addEventListener("click", function(){ movePage(rows, i, 1); });
+        r.appendChild(downBtn);
+      }
+      if(currentUser && row.created_by === currentUser.id){
+        var delBtn = document.createElement("button");
+        delBtn.className = "mini"; delBtn.title = "Delete this page"; delBtn.textContent = "✕";
+        delBtn.addEventListener("click", function(){ deletePage(row); });
+        r.appendChild(delBtn);
+      }
+      pageList.appendChild(r);
+    });
+  }
+
+  function movePage(rows, index, dir){
+    var other = index + dir;
+    if(other < 0 || other >= rows.length) return;
+    var a = rows[index], b = rows[other];
+    var tmp = a.page_order; a.page_order = b.page_order; b.page_order = tmp;
+    renderPageList();
+    sb.from("zine_pages").update({ page_order: a.page_order }).eq("id", a.id).then(function(){});
+    sb.from("zine_pages").update({ page_order: b.page_order }).eq("id", b.id).then(function(){});
+  }
+
+  function createPage(){
+    var issue = currentIssue || 1;
+    var maxOrder = pagesInIssue(issue).reduce(function(m,p){ return Math.max(m, p.page_order); }, -1);
+    sb.from("zine_pages").insert({
+      created_by: currentUser.id,
+      issue_number: issue,
+      page_order: maxOrder + 1,
+      title: "",
+      elements: [],
+      paper: "white",
+      harshness: 22
+    }).select().single().then(function(res){
+      if(res.error){ alert("Couldn't create the page: " + res.error.message); return; }
+      pageRows.push(res.data);
+      renderIssueTabs();
+      switchToPage(res.data);
+      renderPageList();
+      closeDrawer();
+    });
+  }
+
+  function createIssue(){
+    var next = issuesList().reduce(function(m,n){ return Math.max(m,n); }, 0) + 1;
+    currentIssue = next;
+    sb.from("zine_pages").insert({
+      created_by: currentUser.id,
+      issue_number: next,
+      page_order: 0,
+      title: "",
+      elements: [],
+      paper: "white",
+      harshness: 22
+    }).select().single().then(function(res){
+      if(res.error){ alert("Couldn't create the issue: " + res.error.message); return; }
+      pageRows.push(res.data);
+      renderIssueTabs();
+      switchToPage(res.data);
+      renderPageList();
+      closeDrawer();
+    });
+  }
+
+  function deletePage(row){
+    if(pagesInIssue(currentIssue).length <= 1){ alert("You need at least one page in this issue — add another before deleting this one."); return; }
+    if(!confirm("Delete this page? This can't be undone.")) return;
+    sb.from("zine_pages").delete().eq("id", row.id).then(function(res){
+      if(res.error){ alert("Couldn't delete: " + res.error.message); return; }
+      pageRows = pageRows.filter(function(p){ return p.id !== row.id; });
+      if(currentPageRow && currentPageRow.id === row.id){ switchToPage(pagesInIssue(currentIssue)[0]); }
+      renderPageList();
+    });
+  }
+
+  function switchToPage(row){
+    if(!row) return;
+    flushSave();
+    currentPageRow = row;
+    if((row.issue_number||1) !== currentIssue){ currentIssue = row.issue_number||1; renderIssueTabs(); }
+    suppressSave = true;
+
+    page.innerHTML = "";
+    els = [];
+    domMap = {};
+    zTop = 1;
+    selectedId = null;
+
+    document.querySelectorAll(".swatch").forEach(function(b){ b.setAttribute("aria-pressed", String(b.getAttribute("data-stock")===(row.paper||"white"))); });
+    page.className = "page stock-" + (row.paper || "white");
+    harsh.value = row.harshness != null ? row.harshness : 22;
+    harshVal.textContent = harsh.value;
+    applyHarshness(parseInt(harsh.value,10));
+    pageTitleInput.value = row.title || "";
+
+    (row.elements || []).forEach(function(e){
+      if(typeof e.z === "number") zTop = Math.max(zTop, e.z);
+      els.push(e);
+      createDiv(e);
+    });
+
+    selectEl(null);
+    renderLayers();
+    renderPageList();
+    requestAnimationFrame(fitPage);
+    suppressSave = false;
+  }
+
+  pageTitleInput.addEventListener("input", function(){ scheduleSave(); renderPageList(); });
+
+  // --- autosave: debounced so a drag or a flurry of edits is one write, not dozens ---
+  function scheduleSave(){
+    if(suppressSave || !currentPageRow) return;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveNow, 700);
+  }
+  function flushSave(){
+    if(saveTimer){ clearTimeout(saveTimer); saveTimer = null; saveNow(); }
+  }
+  function saveNow(){
+    if(!currentPageRow) return;
+    var row = currentPageRow;
+    var payload = {
+      elements: els,
+      paper: (page.className.replace("page","").replace("stock-","").trim()) || "white",
+      harshness: parseInt(harsh.value,10),
+      title: pageTitleInput.value || null,
+      updated_at: new Date().toISOString()
+    };
+    sb.from("zine_pages").update(payload).eq("id", row.id).then(function(res){
+      if(res.error){ console.error("zine save failed", res.error); }
+    });
+  }
+  window.addEventListener("beforeunload", flushSave);
+
+  // --- drawer open/close ---
+  var aboutPanel = document.getElementById("aboutPanel");
+  var panels = [drawer, aboutPanel];
+  function openPanel(panel){
+    panels.forEach(function(p){ p.classList.remove("open"); });
+    panel.classList.add("open");
+    backdrop.classList.add("open");
+  }
+  function closeDrawer(){ panels.forEach(function(p){ p.classList.remove("open"); }); backdrop.classList.remove("open"); }
+  document.getElementById("menuBtn").addEventListener("click", function(){ openPanel(drawer); });
+  document.getElementById("drawerClose").addEventListener("click", closeDrawer);
+  document.getElementById("aboutBtn").addEventListener("click", function(){ openPanel(aboutPanel); });
+  document.getElementById("aboutClose").addEventListener("click", closeDrawer);
+  backdrop.addEventListener("click", closeDrawer);
+
+  // --- canvas sizing: measure the real space available and fit the portrait page into it (object-fit: contain) ---
+  function fitPage(){
+    var r = canvasWrap.getBoundingClientRect();
+    var pad = 10;
+    var availW = Math.max(80, r.width - pad*2);
+    var availH = Math.max(80, r.height - pad*2);
+    var ratio = 210/297;
+    var w = availW, h = w/ratio;
+    if(h > availH){ h = availH; w = h*ratio; }
+    page.style.width = w+"px";
+    page.style.height = h+"px";
+  }
+  window.addEventListener("resize", fitPage);
+  window.addEventListener("orientationchange", function(){ setTimeout(fitPage,60); });
+
+  // --- fonts: the six from the fanzine's own font palette ---
+  var FONTS = {
+    newspaper: { label:"Newspaper", css:'"Old Standard TT",Georgia,serif' },
+    typewriter:{ label:"Typewriter", css:'"Special Elite","Courier New",monospace' },
+    courier:   { label:"Courier", css:'"Courier Prime","Courier New",monospace' },
+    marker:    { label:"Marker", css:'"Permanent Marker",cursive' },
+    hand:      { label:"Handwritten", css:'"Rock Salt",cursive' },
+    anton:     { label:"Headline (Anton)", css:'Anton,Impact,sans-serif' }
+  };
+  var SIZES = { S:0.75, M:1, L:1.4, XL:1.9, XXL:2.5 };
+
+  function starPolygon(spikes, outerR, innerR){
+    var pts = [];
+    for(var i=0;i<spikes*2;i++){
+      var ang = (Math.PI/spikes)*i - Math.PI/2;
+      var r = (i%2===0) ? outerR : innerR;
+      var x = 50 + r*Math.cos(ang), y = 50 + r*Math.sin(ang);
+      pts.push(x.toFixed(1)+"% "+y.toFixed(1)+"%");
+    }
+    return "polygon(" + pts.join(",") + ")";
+  }
+
+  // jagged "torn paper" edges for text scraps -- one is chosen at random and locked per element,
+  // same idea as the static prototype's c1/c2/c3 clipping variants
+  var TEXT_CLIPS = [
+    "polygon(0% 2%,18% 0%,45% 1%,72% 0%,100% 2%,99% 35%,100% 70%,98% 100%,60% 99%,30% 100%,0% 98%,1% 60%)",
+    "polygon(1% 0%,35% 2%,70% 0%,100% 1%,99% 50%,100% 99%,64% 100%,30% 98%,0% 100%,2% 45%)",
+    "polygon(0% 0%,52% 2%,100% 0%,99% 55%,100% 100%,48% 98%,1% 100%,2% 52%)"
+  ];
+
+  // --- shapes: each type's own clip-path / border treatment / defaults / tilt range ---
+  // baseCq is in cqw (% of the PAGE's own width, not the viewport) so text stays correctly
+  // sized to the page however big or small it's actually rendered on screen
+  var SHAPES = {
+    text:    { clip:"random-torn", font:"newspaper", bg:"#e9e3cf", fg:"#201e1a", baseCq:2.8, content:"New text — tap again to edit", align:"left", tilt:2.2 },
+    rect:    { clip:"polygon(0% 4%,100% 0%,97% 100%,2% 95%)", font:"anton", bg:"#171510", fg:"#f1ede1", baseCq:4.2, content:"HEADLINE", align:"center", tilt:1.6 },
+    burst:   { clip:starPolygon(9,50,23), font:"anton", bg:"#171510", fg:"#f1ede1", baseCq:3.4, content:"NEW!", align:"center", tilt:5 },
+    bubble:  { clip:"polygon(0% 0%,100% 0%,100% 78%,34% 78%,18% 100%,24% 78%,0% 78%)", font:"courier", bg:"#f6f3e8", fg:"#201e1a", baseCq:2.7, content:"Say something...", align:"left", tilt:2.5 },
+    circle:  { round:true, font:"anton", bg:"#171510", fg:"#f1ede1", baseCq:3.2, content:"5/5", align:"center", tilt:4 },
+    arrow:   { clip:"polygon(0% 0%,88% 0%,100% 50%,88% 100%,0% 100%,6% 50%)", font:"anton", bg:"#171510", fg:"#f1ede1", baseCq:3, content:"READ MORE", align:"center", tilt:1.5 },
+    ticket:  { clip:"polygon(0% 0%,100% 0%,100% 35%,94% 50%,100% 65%,100% 100%,0% 100%,0% 65%,6% 50%,0% 35%)", font:"typewriter", bg:"#f7f5ee", fg:"#171510", baseCq:2.4, content:"ADMIT ONE — ONE NIGHT ONLY", align:"left", tilt:3 },
+    stamp:   { border:"double", font:"anton", bg:"#f7f5ee", fg:"#171510", baseCq:3.6, content:"A+", align:"center", tilt:4.5 },
+    outline: { border:"single", font:"typewriter", bg:"#f7f5ee", fg:"#171510", baseCq:2.6, content:"outlined note", align:"left", tilt:1.8 },
+    bolt:    { clip:"polygon(35% 0%, 65% 0%, 45% 40%, 72% 40%, 32% 100%, 42% 55%, 10% 55%)", font:"anton", bg:"#171510", fg:"#f1ede1", baseCq:3.4, content:"ZAP!", align:"center", tilt:5 }
+  };
+
+  function addEl(type, opts){
+    var shape = SHAPES[type];
+    var e = Object.assign({
+      id: uid(), type: type,
+      x: 15, y: 10, w: 60, h: type==="photo" ? 32 : (type==="burst"||type==="circle" ? 26 : 16),
+      rot: 0, // pieces land flat/normal; tilt is opt-in via the selection bar's "Tilt" button
+      textClip: type==="text" ? TEXT_CLIPS[Math.floor(Math.random()*TEXT_CLIPS.length)] : null,
+      content: type==="photo" ? null : (shape && shape.content),
+      filtered: true,
+      font: shape ? shape.font : null,
+      size: "M",
+      inverted: false,
+      z: ++zTop
+    }, opts||{});
+    els.push(e);
+    createDiv(e);
+    selectEl(e.id);
+    if(type!=="photo"){ enterEdit(e.id); }
+    renderSelbar();
+    renderLayers();
+    return e;
+  }
+
+  // --- build a persistent DOM node for an element (created once, updated in place forever after) ---
+  // .el is the plain, unclipped hit-box that's dragged/rotated/resized; .shape is the inner
+  // visual card (background/clip-path/border/font/text). Handles live on .el, outside .shape's
+  // clip, so they're always reachable even on star/odd-shaped pieces.
+  function createDiv(e){
+    var div = document.createElement("div");
+    div.className = "el " + e.type;
+    div.setAttribute("data-id", e.id);
+
+    var shapeEl = document.createElement("div");
+    shapeEl.className = "shape";
+    div.appendChild(shapeEl);
+
+    if(e.type === "photo"){
+      var img = document.createElement("img");
+      img.style.display = "none";
+      var add = document.createElement("span");
+      add.className = "add";
+      add.textContent = "+ tap to add a photo";
+      shapeEl.appendChild(img);
+      shapeEl.appendChild(add);
+    }
+    var rotHandle = document.createElement("div");
+    rotHandle.className = "handle rotate";
+    rotHandle.title = "Rotate";
+    rotHandle.textContent = "↻";
+    var resizeHandle = document.createElement("div");
+    resizeHandle.className = "handle resize";
+    resizeHandle.title = "Resize";
+    div.appendChild(rotHandle);
+    div.appendChild(resizeHandle);
+
+    div.addEventListener("pointerdown", function(ev){ onElPointerDown(ev, e.id); });
+    div.addEventListener("click", function(){ onElClick(e.id); });
+    resizeHandle.addEventListener("pointerdown", function(ev){ ev.stopPropagation(); onResizePointerDown(ev, e.id); });
+    rotHandle.addEventListener("pointerdown", function(ev){ ev.stopPropagation(); onRotatePointerDown(ev, e.id); });
+
+    page.appendChild(div);
+    domMap[e.id] = div;
+    updateDiv(e);
+  }
+
+  // update an existing node's position/size/rotation/content/style/selection -- never recreates it
+  function updateDiv(e){
+    var div = domMap[e.id];
+    if(!div) return;
+    var shapeEl = div.querySelector(".shape");
+    div.style.left = e.x+"%"; div.style.top = e.y+"%";
+    div.style.width = e.w+"%"; div.style.height = e.h+"%";
+    div.style.zIndex = e.z;
+    div.style.transform = "rotate("+e.rot.toFixed(1)+"deg)";
+    div.classList.toggle("selected", e.id===selectedId);
+
+    var dropShadow = "drop-shadow(1px 1.5px 1px rgba(0,0,0,.4))";
+    shapeEl.style.filter = (e.filtered && !globalClean ? "url(#copier) " : "") + dropShadow;
+
+    var def = SHAPES[e.type];
+    if(e.type === "photo"){
+      var img = shapeEl.querySelector("img");
+      var add = shapeEl.querySelector(".add");
+      if(e.content){
+        img.src = e.content; img.style.display = "block"; add.style.display = "none";
+        shapeEl.style.background = "transparent";
+      } else {
+        img.style.display = "none"; add.style.display = "flex";
+        shapeEl.style.background = "#d8d2bd";
+      }
+      scheduleSave();
+      return;
+    }
+
+    // text-bearing shapes
+    var clip = def.clip === "random-torn" ? e.textClip : (def.clip || "none");
+    shapeEl.style.clipPath = clip;
+    shapeEl.style.borderRadius = def.round ? "50%" : "0";
+    if(def.border === "double"){ shapeEl.style.border = "3px solid "+(e.inverted?def.bg:def.fg); shapeEl.style.outline = "1px solid "+(e.inverted?def.bg:def.fg); shapeEl.style.outlineOffset = "3px"; }
+    else if(def.border === "single"){ shapeEl.style.border = "2.5px solid "+(e.inverted?def.bg:def.fg); shapeEl.style.outline = "none"; }
+    else { shapeEl.style.border = "none"; shapeEl.style.outline = "none"; }
+
+    shapeEl.style.textAlign = def.align;
+    shapeEl.style.justifyContent = def.align === "left" ? "flex-start" : "center";
+    var bg = e.inverted ? def.fg : def.bg;
+    var fg = e.inverted ? def.bg : def.fg;
+    shapeEl.style.background = bg;
+    shapeEl.style.color = fg;
+    shapeEl.style.fontFamily = (FONTS[e.font] || FONTS[def.font]).css;
+    shapeEl.style.fontSize = (def.baseCq * (SIZES[e.size]||1)).toFixed(2) + "cqw";
+    if(shapeEl.getAttribute("contenteditable") !== "true"){
+      shapeEl.textContent = e.content;
+    }
+    scheduleSave();
+  }
+
+  function refreshAllFilters(){ els.forEach(updateDiv); }
+
+  function reorderDom(){
+    els.slice().sort(function(a,b){return a.z-b.z;}).forEach(function(e){
+      page.appendChild(domMap[e.id]);
+    });
+  }
+
+  function selectEl(id){
+    var prev = selectedId;
+    selectedId = id;
+    if(prev && domMap[prev]) domMap[prev].classList.remove("selected");
+    if(id && domMap[id]) domMap[id].classList.add("selected");
+    selectionBar.hidden = !id;
+    renderSelbar();
+    renderLayers();
+    requestAnimationFrame(fitPage); // the selection bar taking/releasing space changes how much room the canvas has
+  }
+
+  function bringToFront(id){
+    var e = byId(id);
+    if(!e) return;
+    e.z = ++zTop;
+    var div = domMap[id];
+    if(div) div.style.zIndex = e.z;
+    reorderDom();
+    renderLayers();
+    scheduleSave();
+  }
+  function sendToBack(id){
+    var e = byId(id);
+    if(!e) return;
+    var minZ = Math.min.apply(null, els.map(function(x){return x.z;}));
+    e.z = minZ - 1;
+    var div = domMap[id];
+    if(div) div.style.zIndex = e.z;
+    reorderDom();
+    renderLayers();
+    scheduleSave();
+  }
+
+  function labelFor(e){
+    var typeName = { text:"Text", photo:"Photo", rect:"Bar", burst:"Burst", bubble:"Bubble", circle:"Circle", arrow:"Arrow", ticket:"Ticket", stamp:"Stamp", outline:"Note", bolt:"Bolt" }[e.type];
+    var detail = e.type==="photo" ? (e.content?"has image":"empty") : (e.content||"").slice(0,16);
+    return typeName+": "+detail+(e.filtered?"":" — clean");
+  }
+
+  function renderLayers(){
+    layerList.innerHTML = "";
+    if(els.length === 0){
+      layerList.innerHTML = '<div class="empty-layers">Nothing on the page yet.</div>';
+      return;
+    }
+    els.slice().sort(function(a,b){return b.z-a.z;}).forEach(function(e){
+      var row = document.createElement("div");
+      row.className = "layerrow" + (e.id===selectedId ? " active" : "");
+      var nameBtn = document.createElement("button");
+      nameBtn.className = "name";
+      nameBtn.textContent = labelFor(e);
+      nameBtn.addEventListener("click", function(){ selectEl(e.id); closeDrawer(); });
+      row.appendChild(nameBtn);
+
+      var frontBtn = document.createElement("button");
+      frontBtn.className = "mini"; frontBtn.title = "Bring to front"; frontBtn.textContent = "↑";
+      frontBtn.addEventListener("click", function(){ bringToFront(e.id); });
+      row.appendChild(frontBtn);
+
+      var backBtn = document.createElement("button");
+      backBtn.className = "mini"; backBtn.title = "Send to back"; backBtn.textContent = "↓";
+      backBtn.addEventListener("click", function(){ sendToBack(e.id); });
+      row.appendChild(backBtn);
+
+      layerList.appendChild(row);
+    });
+  }
+
+  function renderSelbar(){
+    selbar.innerHTML = "";
+    selrow.innerHTML = "";
+    var e = byId(selectedId);
+    if(!e) return;
+    var isText = e.type !== "photo";
+
+    if(isText){
+      var editBtn = document.createElement("button");
+      editBtn.textContent = "Edit text";
+      editBtn.addEventListener("click", function(){ enterEdit(e.id); });
+      selbar.appendChild(editBtn);
+    } else {
+      var replaceBtn = document.createElement("button");
+      replaceBtn.textContent = e.content ? "Replace photo" : "Add photo";
+      replaceBtn.addEventListener("click", function(){ pickPhoto(e.id); });
+      selbar.appendChild(replaceBtn);
+    }
+
+    var fillBtn = document.createElement("button");
+    fillBtn.textContent = "Fill page";
+    fillBtn.addEventListener("click", function(){ e.x=0; e.y=0; e.w=100; e.h=100; e.rot=0; updateDiv(e); });
+    selbar.appendChild(fillBtn);
+
+    var filterBtn = document.createElement("button");
+    filterBtn.textContent = e.filtered ? "Keep this one clean" : "Photocopy this one";
+    filterBtn.addEventListener("click", function(){ e.filtered = !e.filtered; updateDiv(e); renderSelbar(); });
+    selbar.appendChild(filterBtn);
+
+    var tiltBtn = document.createElement("button");
+    tiltBtn.textContent = Math.abs(e.rot) < 0.05 ? "Tilt it" : "Reroll tilt";
+    tiltBtn.addEventListener("click", function(){
+      var shape = SHAPES[e.type];
+      var tiltRange = e.type==="photo" ? 1.5 : (shape ? shape.tilt : 2);
+      var r = rnd(-tiltRange, tiltRange);
+      e.rot = r === 0 ? 0.3 : r; // never land back on exactly flat from this button
+      if(e.type==="text"){ e.textClip = TEXT_CLIPS[Math.floor(Math.random()*TEXT_CLIPS.length)]; }
+      updateDiv(e);
+      renderSelbar();
+    });
+    selbar.appendChild(tiltBtn);
+
+    if(Math.abs(e.rot) >= 0.05){
+      var straightenBtn = document.createElement("button");
+      straightenBtn.textContent = "Straighten";
+      straightenBtn.addEventListener("click", function(){
+        e.rot = 0;
+        updateDiv(e);
+        renderSelbar();
+      });
+      selbar.appendChild(straightenBtn);
+    }
+
+    var delBtn = document.createElement("button");
+    delBtn.className = "danger";
+    delBtn.textContent = "Delete";
+    delBtn.addEventListener("click", function(){
+      var div = domMap[e.id];
+      if(div) div.remove();
+      delete domMap[e.id];
+      els = els.filter(function(x){ return x.id!==e.id; });
+      selectEl(null);
+      renderLayers();
+      scheduleSave();
+    });
+    selbar.appendChild(delBtn);
+
+    if(isText){
+      var invertBtn = document.createElement("button");
+      invertBtn.textContent = "Invert colours";
+      invertBtn.setAttribute("aria-pressed", String(e.inverted));
+      invertBtn.addEventListener("click", function(){ e.inverted = !e.inverted; updateDiv(e); renderSelbar(); });
+      selrow.appendChild(invertBtn);
+
+      ["S","M","L","XL","XXL"].forEach(function(s){
+        var b = document.createElement("button");
+        b.textContent = s;
+        b.setAttribute("aria-pressed", String(e.size===s));
+        b.addEventListener("click", function(){ e.size = s; updateDiv(e); renderSelbar(); });
+        selrow.appendChild(b);
+      });
+
+      var sel = document.createElement("select");
+      Object.keys(FONTS).forEach(function(key){
+        var opt = document.createElement("option");
+        opt.value = key; opt.textContent = FONTS[key].label;
+        if(e.font===key) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      sel.addEventListener("change", function(){ e.font = sel.value; updateDiv(e); });
+      selrow.appendChild(sel);
+    }
+  }
+
+  function enterEdit(id){
+    selectEl(id);
+    var div = domMap[id];
+    if(!div) return;
+    var shapeEl = div.querySelector(".shape");
+    shapeEl.setAttribute("contenteditable","true");
+    shapeEl.focus();
+    var range = document.createRange();
+    range.selectNodeContents(shapeEl);
+    range.collapse(false);
+    var sel = window.getSelection();
+    sel.removeAllRanges(); sel.addRange(range);
+
+    function onInput(){
+      var e = byId(id);
+      if(e) e.content = shapeEl.textContent;
+      renderLayers();
+    }
+    function onBlur(){
+      shapeEl.removeAttribute("contenteditable");
+      shapeEl.removeEventListener("input", onInput);
+      shapeEl.removeEventListener("blur", onBlur);
+    }
+    shapeEl.addEventListener("input", onInput);
+    shapeEl.addEventListener("blur", onBlur);
+  }
+
+  // photos upload to Supabase Storage (not inline base64 -- keeps the saved page small and fast)
+  function pickPhoto(id){
+    var input = document.createElement("input");
+    input.type = "file"; input.accept = "image/*";
+    input.addEventListener("change", function(){
+      var file = input.files && input.files[0];
+      if(!file) return;
+      var e = byId(id);
+      if(!e) return;
+      var div = domMap[id];
+      var shapeEl = div && div.querySelector(".shape");
+      var addSpan = shapeEl && shapeEl.querySelector(".add");
+      if(addSpan) addSpan.textContent = "Uploading…";
+      var ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g,"") || "jpg";
+      var path = (currentPageRow ? currentPageRow.id : "misc") + "/" + uid() + "." + ext;
+      sb.storage.from("zine-images").upload(path, file, { upsert:true, contentType: file.type || "image/jpeg" }).then(function(res){
+        if(res.error){
+          alert("Couldn't upload the photo: " + res.error.message);
+          if(addSpan) addSpan.textContent = "+ tap to add a photo";
+          return;
+        }
+        var pub = sb.storage.from("zine-images").getPublicUrl(path);
+        e.content = pub.data.publicUrl;
+        e.photoPath = path;
+        updateDiv(e);
+        renderLayers();
+      });
+    });
+    input.click();
+  }
+
+  // --- interaction state ---
+  var gesture = null;
+
+  function onElPointerDown(ev, id){
+    var div = domMap[id];
+    if(!div) return;
+    var shapeEl = div.querySelector(".shape");
+    if(shapeEl && shapeEl.getAttribute("contenteditable")==="true") return;
+    if(ev.target.classList.contains("handle")) return;
+
+    var wasSelected = (selectedId === id);
+    selectEl(id);
+
+    var e = byId(id);
+    var rect = page.getBoundingClientRect();
+    var startX = ev.clientX, startY = ev.clientY;
+    var startXPct = e.x, startYPct = e.y;
+    var moved = false;
+    div.classList.add("dragging");
+    try { div.setPointerCapture(ev.pointerId); } catch(err){}
+
+    function move(mv){
+      var dxPct = (mv.clientX-startX)/rect.width*100;
+      var dyPct = (mv.clientY-startY)/rect.height*100;
+      if(Math.abs(dxPct)>0.3 || Math.abs(dyPct)>0.3) moved = true;
+      e.x = Math.min(100-e.w, Math.max(0, startXPct+dxPct));
+      e.y = Math.min(100-e.h, Math.max(0, startYPct+dyPct));
+      div.style.left = e.x+"%"; div.style.top = e.y+"%";
+    }
+    function up(){
+      div.classList.remove("dragging");
+      div.removeEventListener("pointermove", move);
+      div.removeEventListener("pointerup", up);
+      div.removeEventListener("pointercancel", up);
+      gesture = { id:id, moved: moved, wasSelected: wasSelected };
+      if(moved) scheduleSave();
+    }
+    div.addEventListener("pointermove", move);
+    div.addEventListener("pointerup", up);
+    div.addEventListener("pointercancel", up);
+  }
+
+  function onElClick(id){
+    var g = gesture;
+    gesture = null;
+    var e = byId(id);
+    if(!e || e.type === "photo") return;
+    if(g && g.id===id && !g.moved && g.wasSelected){
+      enterEdit(id);
+    }
+  }
+
+  function onResizePointerDown(ev, id){
+    var div = domMap[id];
+    var e = byId(id);
+    if(!div || !e) return;
+    var rect = page.getBoundingClientRect();
+    var startX = ev.clientX, startY = ev.clientY;
+    var startW = e.w, startH = e.h;
+    try { div.setPointerCapture(ev.pointerId); } catch(err){}
+
+    function move(mv){
+      var dwPct = (mv.clientX-startX)/rect.width*100;
+      var dhPct = (mv.clientY-startY)/rect.height*100;
+      e.w = Math.min(100-e.x, Math.max(8, startW+dwPct));
+      e.h = Math.min(100-e.y, Math.max(6, startH+dhPct));
+      div.style.width = e.w+"%"; div.style.height = e.h+"%";
+    }
+    function up(){
+      div.removeEventListener("pointermove", move);
+      div.removeEventListener("pointerup", up);
+      div.removeEventListener("pointercancel", up);
+      scheduleSave();
+    }
+    div.addEventListener("pointermove", move);
+    div.addEventListener("pointerup", up);
+    div.addEventListener("pointercancel", up);
+  }
+
+  // rotate: angle is measured from the element's screen-space centre to the pointer,
+  // independent of the element's current rotation, so it tracks the pointer naturally
+  function onRotatePointerDown(ev, id){
+    var div = domMap[id];
+    var e = byId(id);
+    if(!div || !e) return;
+    var pageRect = page.getBoundingClientRect();
+    try { div.setPointerCapture(ev.pointerId); } catch(err){}
+
+    function move(mv){
+      var centerX = pageRect.left + (e.x + e.w/2)/100*pageRect.width;
+      var centerY = pageRect.top + (e.y + e.h/2)/100*pageRect.height;
+      var angle = Math.atan2(mv.clientY-centerY, mv.clientX-centerX) * 180/Math.PI + 90;
+      if(angle > 180) angle -= 360;
+      if(angle < -180) angle += 360;
+      e.rot = angle;
+      div.style.transform = "rotate("+e.rot.toFixed(1)+"deg)";
+    }
+    function up(){
+      div.removeEventListener("pointermove", move);
+      div.removeEventListener("pointerup", up);
+      div.removeEventListener("pointercancel", up);
+      scheduleSave();
+    }
+    div.addEventListener("pointermove", move);
+    div.addEventListener("pointerup", up);
+    div.addEventListener("pointercancel", up);
+  }
+
+  page.addEventListener("pointerdown", function(ev){
+    if(ev.target === page) selectEl(null);
+  });
+
+  var ADD_DEFAULTS = {
+    text:    { x:15, y:10, w:60, h:16 },
+    photo:   { x:15, y:10, w:65, h:30 },
+    rect:    { x:10, y:10, w:80, h:12 },
+    burst:   { x:30, y:10, w:38, h:26 },
+    bubble:  { x:15, y:10, w:65, h:20 },
+    circle:  { x:35, y:10, w:28, h:26 },
+    arrow:   { x:12, y:10, w:70, h:12 },
+    ticket:  { x:12, y:10, w:76, h:14 },
+    stamp:   { x:30, y:10, w:34, h:20 },
+    outline: { x:12, y:10, w:76, h:18 },
+    bolt:    { x:34, y:10, w:30, h:30 }
+  };
+  document.querySelectorAll(".toolbar button[data-add]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var type = btn.getAttribute("data-add");
+      var e = addEl(type, Object.assign({}, ADD_DEFAULTS[type]));
+      if(type === "photo"){ pickPhoto(e.id); }
+      closeDrawer(); // land back on the canvas with the new piece ready to position
+    });
+  });
+
+  document.querySelectorAll(".swatch").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      document.querySelectorAll(".swatch").forEach(function(b){ b.setAttribute("aria-pressed", String(b===btn)); });
+      page.className = "page stock-" + btn.getAttribute("data-stock");
+      scheduleSave();
+    });
+  });
+
+  var cleanToggle = document.getElementById("cleanToggle");
+  cleanToggle.addEventListener("click", function(){
+    globalClean = cleanToggle.getAttribute("aria-pressed") !== "true";
+    cleanToggle.setAttribute("aria-pressed", String(globalClean));
+    cleanToggle.textContent = globalClean ? "Show photocopied" : "Show clean (no copier)";
+    refreshAllFilters();
+  });
+
+  var harsh = document.getElementById("harsh");
+  var harshVal = document.getElementById("harshVal");
+  function applyHarshness(v){
+    var h = v/100;
+    document.getElementById("fBlur").setAttribute("stdDeviation", (0.12 + h*1.1).toFixed(2));
+    document.getElementById("fComp").setAttribute("k3", (0.06 + h*0.6).toFixed(2));
+    document.getElementById("fComp").setAttribute("k4", (-0.03 - h*0.22).toFixed(2));
+    var xfer = document.getElementById("fXfer");
+    xfer.querySelectorAll("feFuncR,feFuncG,feFuncB").forEach(function(f){
+      f.setAttribute("slope", (1.05 + h*0.75).toFixed(2));
+      f.setAttribute("intercept", (-0.04 - h*0.4).toFixed(2));
+    });
+    document.getElementById("tR").setAttribute("tableValues", (0.15 - h*0.2).toFixed(2) + " " + (1 - h*0.12).toFixed(2));
+    document.getElementById("tG").setAttribute("tableValues", (0.15 - h*0.2).toFixed(2) + " " + (1 - h*0.16).toFixed(2));
+    document.getElementById("tB").setAttribute("tableValues", (0.17 - h*0.22).toFixed(2) + " " + (1 - h*0.26).toFixed(2));
+  }
+  harsh.addEventListener("input", function(){
+    harshVal.textContent = harsh.value;
+    applyHarshness(parseInt(harsh.value,10));
+    scheduleSave();
+  });
+  applyHarshness(parseInt(harsh.value,10));
+
+  // --- save/export: rasterize the page to a PNG so it can be looked at or shared outside the browser.
+  // best-effort -- the html2canvas library can't always reproduce the SVG photocopier filter.
+  // Inside the claude.ai artifact viewer a plain download link does nothing, so this offers the
+  // file through the platform's downloads capability when it's present, and falls back to a normal
+  // browser download (for when this file is hosted on its own, e.g. on Rene's own site).
+  var saveBtn = document.getElementById("saveBtn");
+  function saveBlob(blob, filename){
+    if(window.claude && typeof window.claude.use === "function"){
+      window.claude.use("downloads").then(function(downloads){
+        if(!downloads){ saveBlobDirect(blob, filename); return; }
+        downloads.save({ filename: filename, data: blob }).catch(function(err){
+          if(err && err.code === "declined") return;
+          saveBlobDirect(blob, filename);
+        });
+      }).catch(function(){ saveBlobDirect(blob, filename); });
+    } else {
+      saveBlobDirect(blob, filename);
+    }
+  }
+  function saveBlobDirect(blob, filename){
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+  }
+  saveBtn.addEventListener("click", function(){
+    if(typeof html2canvas === "undefined"){
+      alert("Couldn't load the image export tool — check your connection and try again.");
+      return;
+    }
+    var prevSelected = selectedId;
+    selectEl(null); // hide handles/selection outline for a clean export
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Saving…";
+    requestAnimationFrame(function(){
+      html2canvas(page, { backgroundColor: null, scale: 3, useCORS: true }).then(function(canvas){
+        canvas.toBlob(function(blob){
+          if(!blob){ alert("Couldn't export the image — try again, or take a screenshot instead."); return; }
+          saveBlob(blob, "zine-page.png");
+        });
+      }).catch(function(){
+        alert("Couldn't export the image — try again, or take a screenshot instead.");
+      }).then(function(){
+        saveBtn.disabled = false;
+        saveBtn.textContent = "⬇ Save";
+        if(prevSelected) selectEl(prevSelected);
+      });
+    });
+  });
+
+  // --- publishing: export every page of the current issue, in order, as a print-ready PDF.
+  // Also uploaded to Supabase Storage so the public flipbook reader can show it once published. ---
+  function pageCanvas(){
+    selectEl(null);
+    return new Promise(function(resolve, reject){
+      requestAnimationFrame(function(){
+        setTimeout(function(){
+          html2canvas(page, { backgroundColor: "#ffffff", scale: 2.5, useCORS: true }).then(resolve).catch(reject);
+        }, 60); // small settle delay for fonts/images after switching pages
+      });
+    });
+  }
+
+  async function exportIssuePdf(){
+    if(typeof html2canvas === "undefined" || !window.jspdf){
+      alert("Couldn't load the PDF export tools — check your connection and try again.");
+      return;
+    }
+    var rows = pagesInIssue(currentIssue);
+    if(rows.length === 0){ alert("This issue has no pages yet."); return; }
+    var returnTo = currentPageRow;
+    exportPdfBtn.disabled = true;
+    var jsPDFlib = window.jspdf.jsPDF;
+    var doc = new jsPDFlib({ unit: "mm", format: "a4", orientation: "portrait" });
+    try{
+      for(var i=0; i<rows.length; i++){
+        pdfStatus.textContent = "Rendering page " + (i+1) + " of " + rows.length + "…";
+        switchToPage(rows[i]);
+        var canvas = await pageCanvas();
+        var img = canvas.toDataURL("image/jpeg", 0.92);
+        if(i > 0) doc.addPage();
+        doc.addImage(img, "JPEG", 0, 0, 210, 297);
+      }
+      pdfStatus.textContent = "Saving…";
+      var blob = doc.output("blob");
+      var filename = "zine-issue-" + currentIssue + ".pdf";
+      saveBlob(blob, filename);
+
+      pdfStatus.textContent = "Uploading for the digital reader…";
+      var path = "issue-" + currentIssue + ".pdf";
+      var upload = await sb.storage.from("zine-pdfs").upload(path, blob, { upsert:true, contentType:"application/pdf" });
+      if(upload.error){ throw upload.error; }
+      var pub = sb.storage.from("zine-pdfs").getPublicUrl(path);
+      var pdfUrl = pub.data.publicUrl;
+      var upsert = await sb.from("zine_issues").upsert({
+        issue_number: currentIssue,
+        pdf_url: pdfUrl,
+        updated_at: new Date().toISOString()
+      }, { onConflict: "issue_number" }).select().single();
+      if(upsert.error){ throw upsert.error; }
+      issuesMeta[currentIssue] = upsert.data;
+      pdfStatus.textContent = "Done — PDF saved and ready for the digital reader.";
+    }catch(err){
+      console.error("PDF export failed", err);
+      pdfStatus.textContent = "";
+      alert("Couldn't finish the PDF export: " + (err && err.message ? err.message : "try again."));
+    }finally{
+      exportPdfBtn.disabled = false;
+      if(returnTo) switchToPage(returnTo);
+      setTimeout(function(){ pdfStatus.textContent = ""; }, 6000);
+    }
+  }
+  exportPdfBtn.addEventListener("click", exportIssuePdf);
+
+  fitPage();
+  sb.auth.getSession().then(function(res){
+    if(res.data && res.data.session){ onSignedIn(res.data.session.user); }
+  });
+})();
+</script>
+</body>
+</html>
