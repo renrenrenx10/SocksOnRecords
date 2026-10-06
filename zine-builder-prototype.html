@@ -581,6 +581,18 @@ body:not(.authed) #app{display:none}
       renderReleaseList(releases);
     });
   }
+  // Cover art comes straight from Bandcamp's image CDN, which doesn't send CORS headers.
+  // A plain <img> tag can display it fine (that's why it looks right on screen), but
+  // html2canvas can't read pixel data off a cross-origin image without CORS -- it just
+  // silently skips it, which is why covers were missing from exported PDFs. Routing
+  // external cover URLs through a free CORS-enabled image proxy fixes the capture without
+  // changing how the image looks; our own Supabase-hosted photo uploads don't need this.
+  function corsSafeImageUrl(url){
+    if(!url) return url;
+    if(url.indexOf(location.origin) === 0) return url;
+    if(/^https?:\/\/[^/]*supabase\.co\//i.test(url)) return url;
+    return "https://images.weserv.nl/?url=" + encodeURIComponent(url.replace(/^https?:\/\//, ""));
+  }
   function formatReleaseText(r){
     var lines = [];
     lines.push(r.title || "Release");
@@ -598,7 +610,7 @@ body:not(.authed) #app{display:none}
   function addReleaseText(r){ addEl("text", { content: formatReleaseText(r) }); }
   function addReleaseCover(r){
     if(!r.cover_url){ alert("This release doesn't have cover art."); return; }
-    addEl("photo", Object.assign({}, ADD_DEFAULTS.photo, { content: r.cover_url }));
+    addEl("photo", Object.assign({}, ADD_DEFAULTS.photo, { content: corsSafeImageUrl(r.cover_url) }));
   }
   function renderReleaseList(releases){
     var releaseList = document.getElementById("releaseList");
@@ -623,7 +635,7 @@ body:not(.authed) #app{display:none}
       bothBtn.addEventListener("click", function(){
         if(!r.cover_url){ alert("This release doesn't have cover art."); return; }
         // explicit non-overlapping positions so the two pieces don't land stacked on top of each other
-        addEl("photo", { x:15, y:8, w:55, h:34, content:r.cover_url });
+        addEl("photo", { x:15, y:8, w:55, h:34, content: corsSafeImageUrl(r.cover_url) });
         addEl("text", { x:15, y:46, w:65, h:22, content: formatReleaseText(r) });
         closeDrawer();
       });
@@ -1027,7 +1039,8 @@ body:not(.authed) #app{display:none}
       var img = shapeEl.querySelector("img");
       var add = shapeEl.querySelector(".add");
       if(e.content){
-        img.src = e.content; img.style.display = "block"; add.style.display = "none";
+        img.crossOrigin = "anonymous";
+        img.src = corsSafeImageUrl(e.content); img.style.display = "block"; add.style.display = "none";
         shapeEl.style.background = "transparent";
       } else {
         img.style.display = "none"; add.style.display = "flex";
@@ -1516,13 +1529,35 @@ body:not(.authed) #app{display:none}
 
   // --- publishing: export every page of the current issue, in order, as a print-ready PDF.
   // Also uploaded to Supabase Storage so the public flipbook reader can show it once published. ---
+  // Every page switch rebuilds the DOM from scratch, so each <img> is freshly created and may
+  // still be mid-fetch (especially a cover image going through the CORS proxy) when export would
+  // otherwise grab the screenshot a beat later. Wait for every image on the page to actually
+  // finish loading (success or error) before handing off to html2canvas, with a timeout so one
+  // stuck image can't hang the whole export.
+  function waitForImages(container){
+    var imgs = Array.prototype.slice.call(container.querySelectorAll("img")).filter(function(img){ return img.src; });
+    var pending = imgs.filter(function(img){ return !img.complete; });
+    if(pending.length === 0) return Promise.resolve();
+    return Promise.race([
+      Promise.all(pending.map(function(img){
+        return new Promise(function(resolve){
+          img.addEventListener("load", resolve, { once:true });
+          img.addEventListener("error", resolve, { once:true });
+        });
+      })),
+      new Promise(function(resolve){ setTimeout(resolve, 4000); })
+    ]);
+  }
+
   function pageCanvas(){
     selectEl(null);
     return new Promise(function(resolve, reject){
       requestAnimationFrame(function(){
-        setTimeout(function(){
-          html2canvas(page, { backgroundColor: "#ffffff", scale: 2.5, useCORS: true }).then(resolve).catch(reject);
-        }, 60); // small settle delay for fonts/images after switching pages
+        waitForImages(page).then(function(){
+          setTimeout(function(){
+            html2canvas(page, { backgroundColor: "#ffffff", scale: 2.5, useCORS: true }).then(resolve).catch(reject);
+          }, 60); // small settle delay for fonts after images are ready
+        });
       });
     });
   }
