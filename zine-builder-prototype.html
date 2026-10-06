@@ -344,6 +344,8 @@ body:not(.authed) #app{display:none}
   var publishToggle = document.getElementById("publishToggle");
   var exportPdfBtn = document.getElementById("exportPdfBtn");
   var pdfStatus = document.getElementById("pdfStatus");
+  var addPageBtn = document.getElementById("addPageBtn");
+  addPageBtn.addEventListener("click", function(){ createPage(); });
 
   authForm.addEventListener("submit", function(ev){
     ev.preventDefault();
