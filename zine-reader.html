@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Fanzine Reader</title>
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/page-flip@2.0.7/dist/js/page-flip.browser.js"></script>
@@ -161,13 +161,19 @@
     var ratio = 210/297; // A4 portrait
     var pageFlip = null;
 
+    // Decide spread-vs-single by whether there's comfortably enough WIDTH for two pages
+    // side by side (desktop, tablets, phones held landscape with enough room) -- not by
+    // an absolute pixel floor, which on an ordinary portrait phone was satisfied by a
+    // narrow half-width spread page instead of falling back to one full-size page, so
+    // the page rendered small and centered with the rest of the screen empty.
     function sizeFor(){
-      var pad = 24;
+      var pad = 20;
       var maxW = Math.max(100, stage.clientWidth - pad*2);
       var maxH = Math.max(100, stage.clientHeight - pad*2);
-      var singleW = Math.min(maxW/2, maxH*ratio); // leave room for a two-page spread
-      if(singleW < 160){ singleW = Math.min(maxW, maxH*ratio); } // too narrow for a spread -- show one page
-      var w = Math.max(140, Math.floor(singleW));
+      var spreadW = maxH * ratio * 2;
+      var isSpread = maxW >= spreadW * 0.92;
+      var w = isSpread ? Math.min(maxW/2, maxH*ratio) : Math.min(maxW, maxH*ratio);
+      w = Math.max(100, Math.floor(w));
       var h = Math.floor(w / ratio);
       return { w: w, h: h };
     }
@@ -209,10 +215,18 @@
       if(e.key === "ArrowLeft") pageFlip.flipPrev();
     });
 
+    // Mobile browsers often report stale viewport dimensions for a moment right after a
+    // rotation (while their own address-bar/toolbar is still animating away), so rebuild
+    // again a little later on orientationchange rather than trusting the first resize.
     var resizeTimer = null;
-    window.addEventListener("resize", function(){
+    function scheduleBuild(delay){
       clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(build, 200);
+      resizeTimer = setTimeout(build, delay);
+    }
+    window.addEventListener("resize", function(){ scheduleBuild(200); });
+    window.addEventListener("orientationchange", function(){
+      scheduleBuild(80);
+      setTimeout(build, 450); // second pass once the browser chrome has settled
     });
   }
 })();
