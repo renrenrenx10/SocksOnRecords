@@ -53,7 +53,12 @@ body:not(.authed) #app{display:none}
 #authError{color:var(--accent);font-size:13px;margin:10px 0 0}
 
 #canvasWrap{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;padding:12px 0;position:relative}
+#canvasWrap.spread-active{gap:2px;background:#000}
 .page{position:relative;background:#f3efe2;aspect-ratio:210/297;overflow:hidden;touch-action:none;transition:background .25s;box-shadow:0 2px 10px rgba(0,0,0,.25);container-type:inline-size;container-name:page}
+#spreadBar{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 10px;background:#171510;color:#f1ede1;font-size:12px}
+#spreadBar .tbtns{display:flex;gap:8px}
+#spreadBar button{background:#2a2a2a;color:#eee;border:1px solid #3a3a3a;border-radius:8px;padding:6px 10px;font-size:12px}
+#spreadSibling{object-fit:contain;background:#f3efe2;box-shadow:0 2px 10px rgba(0,0,0,.25);flex:0 0 auto}
 .page:empty::after{content:"Blank page — tap ☰ Menu to add your first piece";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:14%;color:#9a9381;font-size:14px;line-height:1.5;pointer-events:none}
 .page.stock-pink{background:#f1dde0}
 .page.stock-green{background:#dde7d6}
@@ -177,7 +182,16 @@ body:not(.authed) #app{display:none}
   </div>
   <div id="saveStatus">All changes saved</div>
 
+  <div id="spreadBar" hidden>
+    <span id="spreadTitle"></span>
+    <div class="tbtns">
+      <button id="spreadSwapBtn">⇄ Swap side</button>
+      <button id="spreadDoneBtn">Done</button>
+    </div>
+  </div>
+
   <div id="canvasWrap">
+    <img id="spreadSibling" alt="Facing page" hidden>
     <div class="page stock-white" id="page"></div>
   </div>
 
@@ -273,6 +287,10 @@ body:not(.authed) #app{display:none}
       <div class="ctl" style="margin-top:8px">
         <button id="exportPdfBtn">📄 Export issue as PDF</button>
       </div>
+      <div class="ctl" style="margin-top:8px">
+        <button id="exportBookletBtn">🖨 Export for print (booklet order)</button>
+      </div>
+      <p class="mini-note" style="margin:4px 0 0">Page order, for reviewing. Booklet order, for sending to a printer — pages are paired and reordered onto sheets (e.g. page 1 shares a sheet-side with the last page) so a folded, stapled copy reads in order.</p>
       <p id="pdfStatus" class="mini-note" style="margin:4px 0 0;min-height:1em"></p>
     </section>
 
@@ -329,17 +347,18 @@ body:not(.authed) #app{display:none}
       <li>Turn the photocopier harshness up or down for the whole page, or keep one piece "clean" while the rest gets copied.</li>
       <li>Reorder layers front-to-back, delete a piece, and pick the paper colour.</li>
       <li>Add pages, switch between them, reorder them, and give each one a title. Group pages into issues, like folders.</li>
+      <li>Edit two facing pages as a spread (the "⇄" button next to a page in the Pages list) so an image or headline can run across the gutter — drag a piece past its own edge and it'll spill onto the facing page too.</li>
       <li>Everyone signed in can see every page.</li>
       <li>Everything saves automatically as you work — close the tab and come back any time.</li>
       <li>Save the page as an image to look at or share outside the browser.</li>
-      <li>Export a whole issue as a print-ready PDF, in page order — it downloads straight away and for printers.</li>
+      <li>Export a whole issue as a PDF in plain page order, for reviewing — or as a booklet-order PDF, with pages paired and reordered onto sheet sides ready to send to a printer.</li>
       <li>Mark an issue "Published" to make it visible in the digital flipbook reader on the website.</li>
     </ul>
     <h2>What it can't do (yet)</h2>
     <ul>
       <li>No undo — if you delete something or mess up a piece, you'll need to re-add it.</li>
       <li>You can only edit or delete your own pages — someone else's page is read-only to you.</li>
-      <li>No spreads yet — each page is a single side.</li>
+      <li>Spread editing shows the facing page as a snapshot, not a second live canvas — tap Swap to edit the other side.</li>
       <li>Very long text in a small piece will just get clipped, not shrunk to fit.</li>
       <li>No multi-select — pieces are moved and resized one at a time.</li>
       <li>The saved image is a best-effort snapshot — the photocopy filter sometimes doesn't carry over perfectly.</li>
@@ -352,6 +371,10 @@ body:not(.authed) #app{display:none}
   "use strict";
   var page = document.getElementById("page");
   var canvasWrap = document.getElementById("canvasWrap");
+  var spreadSibling = document.getElementById("spreadSibling");
+  var spreadBar = document.getElementById("spreadBar");
+  var spreadTitleEl = document.getElementById("spreadTitle");
+  var spreadMode = false, spreadLeftRow = null, spreadRightRow = null, spreadActiveSide = "left";
   var selectionBar = document.getElementById("selectionBar");
   var selbar = document.getElementById("selbar");
   var selrow = document.getElementById("selrow");
@@ -393,6 +416,7 @@ body:not(.authed) #app{display:none}
   var acctEmail = document.getElementById("acctEmail");
   var publishToggle = document.getElementById("publishToggle");
   var exportPdfBtn = document.getElementById("exportPdfBtn");
+  var exportBookletBtn = document.getElementById("exportBookletBtn");
   var pdfStatus = document.getElementById("pdfStatus");
   var addPageBtn = document.getElementById("addPageBtn");
   addPageBtn.addEventListener("click", function(){ createPage(); });
@@ -699,6 +723,11 @@ body:not(.authed) #app{display:none}
         downBtn.className = "mini"; downBtn.title = "Move later"; downBtn.textContent = "↓";
         downBtn.addEventListener("click", function(){ movePage(rows, i, 1); });
         r.appendChild(downBtn);
+
+        var spreadBtn = document.createElement("button");
+        spreadBtn.className = "mini"; spreadBtn.title = "Edit as a two-page spread with the next page"; spreadBtn.textContent = "⇄";
+        spreadBtn.addEventListener("click", function(){ enterSpreadMode(row); closeDrawer(); });
+        r.appendChild(spreadBtn);
       }
       if(currentUser && row.created_by === currentUser.id){
         var delBtn = document.createElement("button");
@@ -719,6 +748,106 @@ body:not(.authed) #app{display:none}
     sb.from("zine_pages").update({ page_order: a.page_order }).eq("id", a.id).then(function(){});
     sb.from("zine_pages").update({ page_order: b.page_order }).eq("id", b.id).then(function(){});
   }
+
+  // --- spreads: edit two facing pages together so a piece can be dragged across the gutter ---
+  // Only one page is ever truly "live" (the normal single-page editor, completely unchanged);
+  // the facing page is shown as a snapshot image beside it. Dragging a piece past its own page's
+  // edge is allowed to spill into that snapshot's space for a real "two-up" view; on every save,
+  // any piece that's spilled over gets a matching copy written onto the facing page itself (see
+  // syncSpreadMirror) so the continuation is actually there once you leave spread mode -- each
+  // page is still saved, viewed and exported completely independently of the other.
+  function enterSpreadMode(primaryRow){
+    var rows = pagesInIssue(primaryRow.issue_number || currentIssue);
+    var idx = -1;
+    for(var i=0;i<rows.length;i++){ if(rows[i].id===primaryRow.id){ idx=i; break; } }
+    if(idx===-1 || idx>=rows.length-1){ alert("Add another page after this one first — a spread needs two pages."); return; }
+    spreadLeftRow = rows[idx];
+    spreadRightRow = rows[idx+1];
+    spreadActiveSide = "left";
+    flushSave();
+    openSpreadActiveSide();
+  }
+
+  function captureRowSnapshot(row){
+    return new Promise(function(resolve){
+      if(typeof html2canvas === "undefined"){ resolve(""); return; }
+      switchToPage(row);
+      pageCanvas().then(function(canvas){ resolve(canvas.toDataURL("image/jpeg",0.9)); }).catch(function(){ resolve(""); });
+    });
+  }
+
+  // Snapshots whichever side is NOT being edited, then loads the side that is into the real
+  // (live, fully-interactive) canvas.
+  function openSpreadActiveSide(){
+    var activeRow = spreadActiveSide==="left" ? spreadLeftRow : spreadRightRow;
+    var siblingRow = spreadActiveSide==="left" ? spreadRightRow : spreadLeftRow;
+    canvasWrap.classList.add("spread-active");
+    spreadBar.hidden = false;
+    spreadTitleEl.textContent = "Spread — editing the " + spreadActiveSide + " page";
+    captureRowSnapshot(siblingRow).then(function(dataUrl){
+      spreadSibling.src = dataUrl;
+      spreadSibling.hidden = false;
+      spreadSibling.style.order = spreadActiveSide==="left" ? "2" : "0";
+      page.style.order = spreadActiveSide==="left" ? "1" : "2";
+      switchToPage(activeRow);
+      page.style.overflow = "visible";
+      spreadMode = true;
+      requestAnimationFrame(fitPage);
+    });
+  }
+
+  function syncSpreadMirror(){
+    if(!spreadMode) return;
+    var siblingRow = spreadActiveSide==="left" ? spreadRightRow : spreadLeftRow;
+    if(!siblingRow) return;
+    var shift = spreadActiveSide==="left" ? -100 : 100;
+    var overflowing = els.filter(function(e){
+      return spreadActiveSide==="left" ? (e.x+e.w > 100.5) : (e.x < -0.5);
+    });
+    var mirrors = overflowing.map(function(e){
+      var copy = Object.assign({}, e);
+      copy.x = e.x + shift;
+      copy.spreadMirror = true;
+      return copy;
+    });
+    var mirrorIds = {};
+    mirrors.forEach(function(m){ mirrorIds[m.id] = true; });
+    var existing = (siblingRow.elements || []).filter(function(e){ return !e.spreadMirror || mirrorIds[e.id]; });
+    var indexById = {};
+    existing.forEach(function(e, idx){ indexById[e.id] = idx; });
+    mirrors.forEach(function(m){
+      if(indexById.hasOwnProperty(m.id)){ existing[indexById[m.id]] = m; }
+      else { existing.push(m); }
+    });
+    siblingRow.elements = existing;
+    sb.from("zine_pages").update({ elements: existing, updated_at: new Date().toISOString() }).eq("id", siblingRow.id).then(function(res){
+      if(res.error){ console.error("spread mirror sync failed", res.error); }
+    });
+  }
+
+  function swapSpreadSide(){
+    flushSave();
+    syncSpreadMirror();
+    spreadActiveSide = spreadActiveSide==="left" ? "right" : "left";
+    openSpreadActiveSide();
+  }
+
+  function exitSpreadMode(){
+    flushSave();
+    syncSpreadMirror();
+    spreadMode = false;
+    page.style.overflow = "";
+    page.style.order = "";
+    canvasWrap.classList.remove("spread-active");
+    spreadBar.hidden = true;
+    spreadSibling.hidden = true;
+    spreadSibling.src = "";
+    spreadLeftRow = null; spreadRightRow = null;
+    requestAnimationFrame(fitPage);
+    renderPageList();
+  }
+  document.getElementById("spreadSwapBtn").addEventListener("click", swapSpreadSide);
+  document.getElementById("spreadDoneBtn").addEventListener("click", exitSpreadMode);
 
   function createPage(){
     if(addPageBtn.disabled) return; // guards against a double-tap firing two inserts with the same page_order
@@ -848,6 +977,7 @@ body:not(.authed) #app{display:none}
     row.paper = paper;
     row.harshness = harshness;
     row.title = title;
+    if(spreadMode) syncSpreadMirror(); // keep the facing page's overflow copy durable even if the tab closes before Swap/Done
     var payload = {
       elements: els,
       paper: paper,
@@ -901,6 +1031,14 @@ body:not(.authed) #app{display:none}
     var availW = Math.max(80, r.width - pad*2);
     var availH = Math.max(80, r.height - pad*2);
     var ratio = 210/297;
+    if(spreadMode){
+      var halfW = (availW-2)/2;
+      var w2 = halfW, h2 = w2/ratio;
+      if(h2 > availH){ h2 = availH; w2 = h2*ratio; }
+      page.style.width = w2+"px"; page.style.height = h2+"px";
+      spreadSibling.style.width = w2+"px"; spreadSibling.style.height = h2+"px";
+      return;
+    }
     var w = availW, h = w/ratio;
     if(h > availH){ h = availH; w = h*ratio; }
     page.style.width = w+"px";
@@ -1325,7 +1463,16 @@ body:not(.authed) #app{display:none}
       var dxPct = (mv.clientX-startX)/rect.width*100;
       var dyPct = (mv.clientY-startY)/rect.height*100;
       if(Math.abs(dxPct)>0.3 || Math.abs(dyPct)>0.3) moved = true;
-      e.x = Math.min(100-e.w, Math.max(0, startXPct+dxPct));
+      // In spread mode, let a piece be dragged out past its own page's edge toward the
+      // facing page -- this page's own overflow is set to visible for exactly this --
+      // instead of the ordinary 0-100 clamp. The other edge (off the book entirely) still
+      // clamps normally.
+      var xMin = 0, xMax = 100-e.w;
+      if(spreadMode){
+        if(spreadActiveSide==="left"){ xMax = 195-e.w; }
+        else { xMin = -95; }
+      }
+      e.x = Math.min(xMax, Math.max(xMin, startXPct+dxPct));
       e.y = Math.min(100-e.h, Math.max(0, startYPct+dyPct));
       div.style.left = e.x+"%"; div.style.top = e.y+"%";
     }
@@ -1364,7 +1511,9 @@ body:not(.authed) #app{display:none}
     function move(mv){
       var dwPct = (mv.clientX-startX)/rect.width*100;
       var dhPct = (mv.clientY-startY)/rect.height*100;
-      e.w = Math.min(100-e.x, Math.max(8, startW+dwPct));
+      var wMax = 100-e.x;
+      if(spreadMode && spreadActiveSide==="left"){ wMax = 195-e.x; } // room to grow across the gutter
+      e.w = Math.min(wMax, Math.max(8, startW+dwPct));
       e.h = Math.min(100-e.y, Math.max(6, startH+dhPct));
       div.style.width = e.w+"%"; div.style.height = e.h+"%";
     }
@@ -1612,6 +1761,95 @@ body:not(.authed) #app{display:none}
     }
   }
   exportPdfBtn.addEventListener("click", exportIssuePdf);
+
+  // --- booklet (print-imposition) export: a SEPARATE download from the page-order export above,
+  // which is left completely alone -- that one is still what gets reviewed and what the digital
+  // reader shows. This one reorders and pairs pages onto sheet sides for a folded, saddle-stitched
+  // print run: sheet 1 carries the front and back cover on one side, pages 2 and (last-1) on the
+  // other, and so on inward. Pads with blank pages at the end if the page count isn't a multiple
+  // of 4, since a booklet needs to fold evenly. Doesn't touch Supabase or the published PDF at all
+  // -- it's a local download only.
+  function loadImageEl(src){
+    return new Promise(function(resolve, reject){
+      var img = new Image();
+      img.onload = function(){ resolve(img); };
+      img.onerror = reject;
+      img.src = src;
+    });
+  }
+
+  async function exportBookletPdf(){
+    if(typeof html2canvas === "undefined" || !window.jspdf){
+      alert("Couldn't load the PDF export tools — check your connection and try again.");
+      return;
+    }
+    var rows = pagesInIssue(currentIssue);
+    if(rows.length === 0){ alert("This issue has no pages yet."); return; }
+    var returnTo = currentPageRow;
+    exportBookletBtn.disabled = true;
+    try{
+      var images = []; // JPEG data URLs, one per real page, captured in page order
+      for(var i=0;i<rows.length;i++){
+        pdfStatus.textContent = "Rendering page " + (i+1) + " of " + rows.length + "…";
+        switchToPage(rows[i]);
+        var canvas = await pageCanvas();
+        images.push(canvas.toDataURL("image/jpeg", 0.9));
+      }
+      var realCount = images.length;
+      if(images.length % 4 !== 0){
+        var sample0 = await loadImageEl(images[0]);
+        var blankCanvas = document.createElement("canvas");
+        blankCanvas.width = sample0.width; blankCanvas.height = sample0.height;
+        blankCanvas.getContext("2d").fillStyle = "#ffffff";
+        blankCanvas.getContext("2d").fillRect(0, 0, blankCanvas.width, blankCanvas.height);
+        var blankUrl = blankCanvas.toDataURL("image/jpeg", 0.9);
+        while(images.length % 4 !== 0){ images.push(blankUrl); }
+      }
+      var N = images.length;
+      var sheets = N / 4;
+      var sample = await loadImageEl(images[0]);
+      var w = sample.width, h = sample.height;
+      var composite = document.createElement("canvas");
+      composite.width = w * 2; composite.height = h;
+      var cctx = composite.getContext("2d");
+      var jsPDFlib = window.jspdf.jsPDF;
+      var doc = new jsPDFlib({ unit: "mm", format: "a3", orientation: "landscape" });
+
+      var first = true;
+      async function drawSide(leftN, rightN){
+        var leftImg = await loadImageEl(images[leftN-1]);
+        var rightImg = await loadImageEl(images[rightN-1]);
+        cctx.clearRect(0, 0, composite.width, composite.height);
+        cctx.drawImage(leftImg, 0, 0, w, h);
+        cctx.drawImage(rightImg, w, 0, w, h);
+        var out = composite.toDataURL("image/jpeg", 0.92);
+        if(!first) doc.addPage();
+        first = false;
+        doc.addImage(out, "JPEG", 0, 0, 420, 297);
+      }
+
+      for(var s=0; s<sheets; s++){
+        pdfStatus.textContent = "Imposing sheet " + (s+1) + " of " + sheets + "…";
+        await drawSide(N - 2*s, 2*s + 1);       // outer side of this sheet
+        await drawSide(2*s + 2, N - 2*s - 1);   // inner side of this sheet
+      }
+
+      pdfStatus.textContent = "Saving…";
+      var blob = doc.output("blob");
+      saveBlob(blob, "zine-issue-" + currentIssue + "-booklet-print.pdf");
+      var added = N - realCount;
+      pdfStatus.textContent = "Done — booklet-order PDF saved." + (added > 0 ? " (" + added + " blank page" + (added>1?"s":"") + " added at the end so it folds evenly.)" : "");
+    }catch(err){
+      console.error("Booklet export failed", err);
+      pdfStatus.textContent = "";
+      alert("Couldn't finish the booklet export: " + (err && err.message ? err.message : "try again."));
+    }finally{
+      exportBookletBtn.disabled = false;
+      if(returnTo) switchToPage(returnTo);
+      setTimeout(function(){ pdfStatus.textContent = ""; }, 8000);
+    }
+  }
+  exportBookletBtn.addEventListener("click", exportBookletPdf);
 
   fitPage();
   sb.auth.getSession().then(function(res){
