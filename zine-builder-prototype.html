@@ -32,7 +32,8 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"
 #topbar{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:8px;padding-block:calc(10px + env(safe-area-inset-top,0px)) 8px;border-bottom:1.5px solid var(--line)}
 #topbar h1{font-weight:700;font-size:16px;margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #topbar .tbtns{display:flex;gap:4px;flex:0 0 auto}
-#menuBtn,#aboutBtn,#pagesBtn{font-weight:700;font-size:10.5px;background:var(--card);border:1.5px solid var(--line);color:var(--fg);padding:7px 6px;cursor:pointer;white-space:nowrap}
+#menuBtn,#aboutBtn,#pagesBtn,#layersBtn{font-weight:700;font-size:10.5px;background:var(--card);border:1.5px solid var(--line);color:var(--fg);padding:7px 7px;cursor:pointer;white-space:nowrap}
+#aboutBtn,#menuBtn{padding:7px 10px}
 #saveBtn{font-weight:700;font-size:10.5px;background:var(--accent);border:1.5px solid var(--accent);color:#fff;padding:7px 6px;cursor:pointer;white-space:nowrap}
 #saveBtn:disabled{opacity:.6}
 
@@ -165,9 +166,10 @@ body:not(.authed) #app{display:none}
     <h1>Zine Page Builder</h1>
     <div class="tbtns">
       <button id="saveBtn">⬇ Save</button>
-      <button id="pagesBtn">📑 Pages</button>
-      <button id="aboutBtn">? About</button>
-      <button id="menuBtn">☰ Menu</button>
+      <button id="pagesBtn" title="Pages &amp; issues">📑 Pages</button>
+      <button id="layersBtn" title="Layers">🗂 Layers</button>
+      <button id="aboutBtn" title="About">?</button>
+      <button id="menuBtn" title="Menu">☰</button>
     </div>
   </div>
 
@@ -205,6 +207,7 @@ body:not(.authed) #app{display:none}
         <button data-add="outline">+ Outlined note</button>
         <button data-add="bolt">+ Lightning bolt</button>
         <button id="addGigBtn">+ Gig listing</button>
+        <button id="addReleaseBtn">+ Release listing</button>
       </div>
     </section>
 
@@ -227,11 +230,6 @@ body:not(.authed) #app{display:none}
     </section>
 
     <section>
-      <h2>Layers, front to back</h2>
-      <div id="layerList"></div>
-    </section>
-
-    <section>
       <h2>Account</h2>
       <div class="ctl">
         <span class="lbl" id="acctEmail"></span>
@@ -240,6 +238,17 @@ body:not(.authed) #app{display:none}
         <button id="signOutBtn">Sign out</button>
       </div>
     </section>
+  </div>
+</div>
+
+<div id="layersPanel" class="sheet">
+  <div class="drawerHead">
+    <strong>Layers, front to back</strong>
+    <button id="layersClose">Close</button>
+  </div>
+  <div class="drawerBody">
+    <p class="drawerHint">Front-most piece is at the top. Use ↑/↓ to move a piece one layer at a time, or tap its name to select it on the page.</p>
+    <div id="layerList"></div>
   </div>
 </div>
 
@@ -285,6 +294,17 @@ body:not(.authed) #app{display:none}
   <div class="drawerBody">
     <p class="drawerHint">Upcoming gigs from the Socks On Records site. Tap one to drop its details onto the page as a text piece — then edit the wording however you like.</p>
     <div id="gigList"></div>
+  </div>
+</div>
+
+<div id="releasePanel" class="sheet">
+  <div class="drawerHead">
+    <strong>Add a release</strong>
+    <button id="releaseClose">Close</button>
+  </div>
+  <div class="drawerBody">
+    <p class="drawerHint">Releases from the Socks On Records site, newest first. Tap one to drop its details onto the page as editable text.</p>
+    <div id="releaseList"></div>
   </div>
 </div>
 
@@ -543,6 +563,49 @@ body:not(.authed) #app{display:none}
     });
   }
 
+  // --- releases: pulled from the Socks On Records site's own "releases" table, newest first. ---
+  var releasesLoaded = false;
+  function loadReleases(){
+    var releaseList = document.getElementById("releaseList");
+    if(releasesLoaded) return; // cached for the session
+    releaseList.innerHTML = "<p class=\"drawerHint\">Loading…</p>";
+    sb.from("releases").select("*").order("released_date", { ascending:false }).then(function(res){
+      if(res.error){ releaseList.innerHTML = "<p class=\"drawerHint\">Couldn't load releases: " + res.error.message + "</p>"; return; }
+      var releases = res.data || [];
+      if(releases.length === 0){ releaseList.innerHTML = "<p class=\"drawerHint\">No releases listed on the site yet.</p>"; return; }
+      releasesLoaded = true;
+      renderReleaseList(releases);
+    });
+  }
+  function formatReleaseText(r){
+    var lines = [];
+    lines.push(r.title || "Release");
+    if(r.artist_text) lines.push(r.artist_text);
+    var meta = [r.type, r.released_text || r.released_date].filter(Boolean).join(" · ");
+    if(meta) lines.push(meta);
+    if(r.label) lines.push("on " + r.label);
+    if(r.description) lines.push(r.description);
+    if(r.bandcamp_url) lines.push(r.bandcamp_url);
+    return lines.join("\n");
+  }
+  function renderReleaseList(releases){
+    var releaseList = document.getElementById("releaseList");
+    releaseList.innerHTML = "";
+    releases.forEach(function(r){
+      var row = document.createElement("div");
+      row.className = "layerrow";
+      var btn = document.createElement("button");
+      btn.className = "name";
+      btn.textContent = (r.released_text || r.released_date || "") + " — " + (r.title || "Release") + (r.artist_text ? " (" + r.artist_text + ")" : "");
+      btn.addEventListener("click", function(){
+        addEl("text", { content: formatReleaseText(r) });
+        closeDrawer();
+      });
+      row.appendChild(btn);
+      releaseList.appendChild(row);
+    });
+  }
+
   // --- pages: list, load, create, reorder, delete ---
   function loadPages(){
     sb.from("zine_pages").select("*").order("page_order", { ascending:true }).then(function(res){
@@ -619,6 +682,9 @@ body:not(.authed) #app{display:none}
   }
 
   function createPage(){
+    if(addPageBtn.disabled) return; // guards against a double-tap firing two inserts with the same page_order
+    addPageBtn.disabled = true;
+    flushSave(); // make sure the page we're leaving is fully saved before we start
     var issue = currentIssue || 1;
     var maxOrder = pagesInIssue(issue).reduce(function(m,p){ return Math.max(m, p.page_order); }, -1);
     sb.from("zine_pages").insert({
@@ -630,6 +696,7 @@ body:not(.authed) #app{display:none}
       paper: "white",
       harshness: 22
     }).select().single().then(function(res){
+      addPageBtn.disabled = false;
       if(res.error){ alert("Couldn't create the page: " + res.error.message); return; }
       pageRows.push(res.data);
       renderIssueTabs();
@@ -738,8 +805,10 @@ body:not(.authed) #app{display:none}
   // --- drawer open/close ---
   var aboutPanel = document.getElementById("aboutPanel");
   var pagesPanel = document.getElementById("pagesPanel");
+  var layersPanel = document.getElementById("layersPanel");
   var gigPanel = document.getElementById("gigPanel");
-  var panels = [drawer, aboutPanel, pagesPanel, gigPanel];
+  var releasePanel = document.getElementById("releasePanel");
+  var panels = [drawer, aboutPanel, pagesPanel, layersPanel, gigPanel, releasePanel];
   function openPanel(panel){
     panels.forEach(function(p){ p.classList.remove("open"); });
     panel.classList.add("open");
@@ -752,8 +821,12 @@ body:not(.authed) #app{display:none}
   document.getElementById("aboutClose").addEventListener("click", closeDrawer);
   document.getElementById("pagesBtn").addEventListener("click", function(){ openPanel(pagesPanel); });
   document.getElementById("pagesClose").addEventListener("click", closeDrawer);
+  document.getElementById("layersBtn").addEventListener("click", function(){ openPanel(layersPanel); });
+  document.getElementById("layersClose").addEventListener("click", closeDrawer);
   document.getElementById("addGigBtn").addEventListener("click", function(){ openPanel(gigPanel); loadUpcomingGigs(); });
   document.getElementById("gigClose").addEventListener("click", closeDrawer);
+  document.getElementById("addReleaseBtn").addEventListener("click", function(){ openPanel(releasePanel); loadReleases(); });
+  document.getElementById("releaseClose").addEventListener("click", closeDrawer);
   backdrop.addEventListener("click", closeDrawer);
 
   // --- canvas sizing: measure the real space available and fit the portrait page into it (object-fit: contain) ---
@@ -952,23 +1025,17 @@ body:not(.authed) #app{display:none}
     requestAnimationFrame(fitPage); // the selection bar taking/releasing space changes how much room the canvas has
   }
 
-  function bringToFront(id){
-    var e = byId(id);
-    if(!e) return;
-    e.z = ++zTop;
-    var div = domMap[id];
-    if(div) div.style.zIndex = e.z;
-    reorderDom();
-    renderLayers();
-    scheduleSave();
-  }
-  function sendToBack(id){
-    var e = byId(id);
-    if(!e) return;
-    var minZ = Math.min.apply(null, els.map(function(x){return x.z;}));
-    e.z = minZ - 1;
-    var div = domMap[id];
-    if(div) div.style.zIndex = e.z;
+  // swaps z with the element immediately above (dir -1, toward front) or below (dir +1, toward back)
+  // in the current stacking order -- moves one layer at a time rather than jumping to front/back
+  function moveLayer(id, dir){
+    var order = els.slice().sort(function(a,b){ return b.z-a.z; });
+    var idx = -1;
+    for(var i=0;i<order.length;i++){ if(order[i].id===id){ idx = i; break; } }
+    var swapIdx = idx + dir;
+    if(idx===-1 || swapIdx<0 || swapIdx>=order.length) return;
+    var a = order[idx], b = order[swapIdx];
+    var tmp = a.z; a.z = b.z; b.z = tmp;
+    [a,b].forEach(function(x){ var div = domMap[x.id]; if(div) div.style.zIndex = x.z; });
     reorderDom();
     renderLayers();
     scheduleSave();
@@ -986,7 +1053,8 @@ body:not(.authed) #app{display:none}
       layerList.innerHTML = '<div class="empty-layers">Nothing on the page yet.</div>';
       return;
     }
-    els.slice().sort(function(a,b){return b.z-a.z;}).forEach(function(e){
+    var order = els.slice().sort(function(a,b){return b.z-a.z;});
+    order.forEach(function(e, i){
       var row = document.createElement("div");
       row.className = "layerrow" + (e.id===selectedId ? " active" : "");
       var nameBtn = document.createElement("button");
@@ -995,15 +1063,18 @@ body:not(.authed) #app{display:none}
       nameBtn.addEventListener("click", function(){ selectEl(e.id); closeDrawer(); });
       row.appendChild(nameBtn);
 
-      var frontBtn = document.createElement("button");
-      frontBtn.className = "mini"; frontBtn.title = "Bring to front"; frontBtn.textContent = "↑";
-      frontBtn.addEventListener("click", function(){ bringToFront(e.id); });
-      row.appendChild(frontBtn);
-
-      var backBtn = document.createElement("button");
-      backBtn.className = "mini"; backBtn.title = "Send to back"; backBtn.textContent = "↓";
-      backBtn.addEventListener("click", function(){ sendToBack(e.id); });
-      row.appendChild(backBtn);
+      if(i > 0){
+        var upBtn = document.createElement("button");
+        upBtn.className = "mini"; upBtn.title = "Move up a layer"; upBtn.textContent = "↑";
+        upBtn.addEventListener("click", function(){ moveLayer(e.id, -1); });
+        row.appendChild(upBtn);
+      }
+      if(i < order.length-1){
+        var downBtn = document.createElement("button");
+        downBtn.className = "mini"; downBtn.title = "Move down a layer"; downBtn.textContent = "↓";
+        downBtn.addEventListener("click", function(){ moveLayer(e.id, 1); });
+        row.appendChild(downBtn);
+      }
 
       layerList.appendChild(row);
     });
