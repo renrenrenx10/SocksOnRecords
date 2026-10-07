@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Socks On Fanzine: DIY punk zine | Socks On Records</title>
+<meta name="description" content="Socks On Fanzine is a DIY, photocopied-style punk zine built page by page by the Socks On Records community. Read the latest issue online, free.">
+<link rel="canonical" href="https://socksonrecords.uk/zine/">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="theme-color" content="#16130F">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:site_name" content="Socks On Records">
+<meta property="og:locale" content="en_GB">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Socks On Fanzine: DIY punk zine | Socks On Records">
+<meta property="og:description" content="Socks On Fanzine is a DIY, photocopied-style punk zine built page by page by the Socks On Records community. Read the latest issue online, free.">
+<meta property="og:url" content="https://socksonrecords.uk/zine/">
+<meta property="og:image" content="https://socksonrecords.uk/og-image.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Socks On Fanzine: DIY punk zine | Socks On Records">
+<meta name="twitter:description" content="Socks On Fanzine is a DIY, photocopied-style punk zine built page by page by the Socks On Records community. Read the latest issue online, free.">
+<meta name="twitter:image" content="https://socksonrecords.uk/og-image.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/seo.css">
+<style>
+  /* small additions kept local to this page rather than touching the shared seo.css */
+  .zine-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:28px;margin:20px 0 8px}
+  .zine-card{background:var(--card);border:2px solid var(--ink);box-shadow:5px 5px 0 var(--ink);padding:18px}
+  .zine-card h2{font-size:22px;margin:0 0 12px}
+  .zine-empty,.zine-loading{font-family:'Space Mono',monospace;font-size:14px;color:var(--ink);opacity:.7}
+  .cta{background:var(--card);border:2px solid var(--ink);box-shadow:5px 5px 0 var(--ink);padding:24px;max-width:640px;margin:40px 0 0}
+  .cta h2{margin-top:0}
+</style>
+</head>
+<body>
+<header class="top"><div class="w"><a class="logo" href="/"><img src="/logo.png" alt="Socks On Records" width="130" height="65"></a><nav aria-label="Main"><a href="/roster/">Roster</a><a href="/gigs/">Gigs</a><a href="/releases/">Releases</a><a href="/videos/">Videos</a><a href="/sessions/">Sessions</a><a href="/zine/" aria-current=page>Zine</a><a href="https://socksonrecords.bigcartel.com/" rel="noopener">Merch</a><a href="/contact/">Contact</a></nav></div></header>
+<main class="w">
+<h1>Socks On Fanzine</h1>
+<p class="lead">A DIY, photocopied-style punk zine built page by page by whoever's around Socks On Records — bands, mates, whoever wants in. No glossy printers, no editorial board, just scissors-and-glue energy on a screen.</p>
+
+<div id="zineIssues" class="zine-grid"><p class="zine-loading">Loading issues&hellip;</p></div>
+
+<div class="cta">
+<h2>Want a page in it?</h2>
+<p>If you've got something to say, draw, rant about or rip out of a magazine — a gig review, a band interview, a comic, whatever — we'll give you a page to fill. No experience needed.</p>
+<p class="btns"><a class="btn" href="mailto:socksonrecords@gmail.com?subject=Fanzine%20page">Get in touch</a></p>
+</div>
+
+</main>
+<footer class="w"><p>Socks On Records &middot; DIY label, gig promoters and community. Totally non-profit. &middot; Peterborough &amp; King's Lynn, East of England</p>
+<p><a href="mailto:socksonrecords@gmail.com">socksonrecords@gmail.com</a> &middot; <a href="https://www.instagram.com/socks_on_records/">Instagram</a> &middot; <a href="https://www.instagram.com/socksongraphics/">Socks On Graphics</a></p></footer>
+
+<script>
+(function(){
+  "use strict";
+  var SUPABASE_URL = "https://xnbkdgmojfupjerqorcw.supabase.co";
+  var SUPABASE_KEY = "sb_publishable__XrZLQTrqwf9xeLBn5xI7w_vVgFJzCf";
+  var box = document.getElementById("zineIssues");
+
+  function esc(s){
+    var d = document.createElement("div");
+    d.textContent = s == null ? "" : String(s);
+    return d.innerHTML;
+  }
+
+  fetch(SUPABASE_URL + "/rest/v1/zine_issues?select=issue_number,title,pdf_url&published=eq.true&order=issue_number.desc", {
+    headers: { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + SUPABASE_KEY }
+  }).then(function(r){ return r.json(); }).then(function(rows){
+    if(!rows || !rows.length){
+      box.innerHTML = '<p class="zine-empty">First issue is being put together — check back soon.</p>';
+      return;
+    }
+    box.innerHTML = rows.map(function(row){
+      var heading = "Issue " + row.issue_number + (row.title ? " — " + row.title : "");
+      var readUrl = "/zine-reader.html?issue=" + encodeURIComponent(row.issue_number);
+      var dl = row.pdf_url ? '<a class="btn sm" href="' + esc(row.pdf_url) + '" rel="noopener">Download PDF</a>' : "";
+      return '<div class="zine-card"><h2>' + esc(heading) + '</h2>' +
+        '<p class="btns"><a class="btn sm" href="' + readUrl + '">Read online</a>' + dl + '</p></div>';
+    }).join("");
+  }).catch(function(){
+    box.innerHTML = '<p class="zine-empty">Couldn’t load issues right now &mdash; try again shortly.</p>';
+  });
+})();
+</script>
+
+</body>
+</html>
