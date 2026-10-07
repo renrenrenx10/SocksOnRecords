@@ -28,6 +28,7 @@
   /* small additions kept local to this page rather than touching the shared seo.css */
   .zine-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:28px;margin:20px 0 8px}
   .zine-card{background:var(--card);border:2px solid var(--ink);box-shadow:5px 5px 0 var(--ink);padding:18px}
+  .zine-cover{display:block;width:100%;aspect-ratio:210/297;object-fit:cover;border:2px solid var(--ink);background:var(--paper);margin:0 0 14px}
   .zine-card h2{font-size:22px;margin:0 0 12px}
   .zine-empty,.zine-loading{font-family:'Space Mono',monospace;font-size:14px;color:var(--ink);opacity:.7}
   .cta{background:var(--card);border:2px solid var(--ink);box-shadow:5px 5px 0 var(--ink);padding:24px;max-width:640px;margin:40px 0 0}
@@ -65,7 +66,7 @@
     return d.innerHTML;
   }
 
-  fetch(SUPABASE_URL + "/rest/v1/zine_issues?select=issue_number,title,pdf_url&published=eq.true&order=issue_number.desc", {
+  fetch(SUPABASE_URL + "/rest/v1/zine_issues?select=issue_number,title,pdf_url,cover_url&published=eq.true&order=issue_number.desc", {
     headers: { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + SUPABASE_KEY }
   }).then(function(r){ return r.json(); }).then(function(rows){
     if(!rows || !rows.length){
@@ -76,7 +77,8 @@
       var heading = "Issue " + row.issue_number + (row.title ? " — " + row.title : "");
       var readUrl = "/zine-reader.html?issue=" + encodeURIComponent(row.issue_number);
       var dl = row.pdf_url ? '<a class="btn sm" href="' + esc(row.pdf_url) + '" rel="noopener">Download PDF</a>' : "";
-      return '<div class="zine-card"><h2>' + esc(heading) + '</h2>' +
+      var cover = row.cover_url ? '<img class="zine-cover" src="' + esc(row.cover_url) + '" alt="' + esc(heading) + ' cover" loading="lazy">' : "";
+      return '<div class="zine-card">' + cover + '<h2>' + esc(heading) + '</h2>' +
         '<p class="btns"><a class="btn sm" href="' + readUrl + '">Read online</a>' + dl + '</p></div>';
     }).join("");
   }).catch(function(){
