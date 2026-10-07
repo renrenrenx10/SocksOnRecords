@@ -24,11 +24,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/seo.css">
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 <style>
   /* small additions kept local to this page rather than touching the shared seo.css */
   .zine-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:28px;margin:20px 0 8px}
   .zine-card{background:var(--card);border:2px solid var(--ink);box-shadow:5px 5px 0 var(--ink);padding:18px}
   .zine-cover{display:block;width:100%;aspect-ratio:210/297;object-fit:cover;border:2px solid var(--ink);background:var(--paper);margin:0 0 14px}
+  .zine-card.no-cover .zine-cover{display:none}
   .zine-card h2{font-size:22px;margin:0 0 12px}
   .zine-empty,.zine-loading{font-family:'Space Mono',monospace;font-size:14px;color:var(--ink);opacity:.7}
   .cta{background:var(--card);border:2px solid var(--ink);box-shadow:5px 5px 0 var(--ink);padding:24px;max-width:640px;margin:40px 0 0}
@@ -60,10 +62,34 @@
   var SUPABASE_KEY = "sb_publishable__XrZLQTrqwf9xeLBn5xI7w_vVgFJzCf";
   var box = document.getElementById("zineIssues");
 
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+
+  // 1x1 transparent GIF -- keeps <img> from showing a broken-image icon while the real
+  // cover (either row.cover_url, or the rendered first PDF page) is still loading in.
+  var BLANK = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
+
   function esc(s){
     var d = document.createElement("div");
     d.textContent = s == null ? "" : String(s);
     return d.innerHTML;
+  }
+
+  // The cover is always just the zine's own first page, so rather than asking anyone to
+  // screen-grab and upload a separate image, pull it straight out of the issue's PDF with
+  // pdf.js and render it onto the card. row.cover_url (not currently set on any issue) is
+  // kept as a manual override, so a hand-picked cover still wins if one is ever added.
+  function renderCoverFromPdf(pdfUrl, img){
+    pdfjsLib.getDocument(pdfUrl).promise.then(function(pdf){
+      return pdf.getPage(1);
+    }).then(function(page){
+      var viewport = page.getViewport({ scale: 0.6 });
+      var canvas = document.createElement("canvas");
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      return page.render({ canvasContext: canvas.getContext("2d"), viewport: viewport }).promise.then(function(){
+        img.src = canvas.toDataURL("image/jpeg", 0.82);
+      });
+    }).catch(function(){ img.closest(".zine-card").classList.add("no-cover"); });
   }
 
   fetch(SUPABASE_URL + "/rest/v1/zine_issues?select=issue_number,title,pdf_url,cover_url&published=eq.true&order=issue_number.desc", {
@@ -77,10 +103,17 @@
       var heading = "Issue " + row.issue_number + (row.title ? " — " + row.title : "");
       var readUrl = "/zine-reader.html?issue=" + encodeURIComponent(row.issue_number);
       var dl = row.pdf_url ? '<a class="btn sm" href="' + esc(row.pdf_url) + '" rel="noopener">Download PDF</a>' : "";
-      var cover = row.cover_url ? '<img class="zine-cover" src="' + esc(row.cover_url) + '" alt="' + esc(heading) + ' cover" loading="lazy">' : "";
+      var coverSrc = row.cover_url ? esc(row.cover_url) : BLANK;
+      var cover = (row.cover_url || row.pdf_url)
+        ? '<img class="zine-cover" src="' + coverSrc + '" data-cover-pdf="' + (row.cover_url ? "" : esc(row.pdf_url)) + '" alt="' + esc(heading) + ' cover" loading="lazy">'
+        : "";
       return '<div class="zine-card">' + cover + '<h2>' + esc(heading) + '</h2>' +
         '<p class="btns"><a class="btn sm" href="' + readUrl + '">Read online</a>' + dl + '</p></div>';
     }).join("");
+    box.querySelectorAll("img.zine-cover[data-cover-pdf]").forEach(function(img){
+      var pdfUrl = img.getAttribute("data-cover-pdf");
+      if(pdfUrl) renderCoverFromPdf(pdfUrl, img);
+    });
   }).catch(function(){
     box.innerHTML = '<p class="zine-empty">Couldn’t load issues right now &mdash; try again shortly.</p>';
   });
