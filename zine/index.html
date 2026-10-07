@@ -65,7 +65,7 @@
   pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
 
   // 1x1 transparent GIF -- keeps <img> from showing a broken-image icon while the real
-  // cover (either row.cover_url, or the rendered first PDF page) is still loading in.
+  // cover (the rendered first PDF page) is still loading in.
   var BLANK = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
 
   function esc(s){
@@ -76,8 +76,7 @@
 
   // The cover is always just the zine's own first page, so rather than asking anyone to
   // screen-grab and upload a separate image, pull it straight out of the issue's PDF with
-  // pdf.js and render it onto the card. row.cover_url (not currently set on any issue) is
-  // kept as a manual override, so a hand-picked cover still wins if one is ever added.
+  // pdf.js and render it onto the card. No extra DB column needed -- nothing to keep in sync.
   function renderCoverFromPdf(pdfUrl, img){
     pdfjsLib.getDocument(pdfUrl).promise.then(function(pdf){
       return pdf.getPage(1);
@@ -92,7 +91,7 @@
     }).catch(function(){ img.closest(".zine-card").classList.add("no-cover"); });
   }
 
-  fetch(SUPABASE_URL + "/rest/v1/zine_issues?select=issue_number,title,pdf_url,cover_url&published=eq.true&order=issue_number.desc", {
+  fetch(SUPABASE_URL + "/rest/v1/zine_issues?select=issue_number,title,pdf_url&published=eq.true&order=issue_number.desc", {
     headers: { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + SUPABASE_KEY }
   }).then(function(r){ return r.json(); }).then(function(rows){
     if(!rows || !rows.length){
@@ -103,16 +102,14 @@
       var heading = "Issue " + row.issue_number + (row.title ? " — " + row.title : "");
       var readUrl = "/zine-reader.html?issue=" + encodeURIComponent(row.issue_number);
       var dl = row.pdf_url ? '<a class="btn sm" href="' + esc(row.pdf_url) + '" rel="noopener">Download PDF</a>' : "";
-      var coverSrc = row.cover_url ? esc(row.cover_url) : BLANK;
-      var cover = (row.cover_url || row.pdf_url)
-        ? '<img class="zine-cover" src="' + coverSrc + '" data-cover-pdf="' + (row.cover_url ? "" : esc(row.pdf_url)) + '" alt="' + esc(heading) + ' cover" loading="lazy">'
+      var cover = row.pdf_url
+        ? '<img class="zine-cover" src="' + BLANK + '" data-cover-pdf="' + esc(row.pdf_url) + '" alt="' + esc(heading) + ' cover" loading="lazy">'
         : "";
       return '<div class="zine-card">' + cover + '<h2>' + esc(heading) + '</h2>' +
         '<p class="btns"><a class="btn sm" href="' + readUrl + '">Read online</a>' + dl + '</p></div>';
     }).join("");
     box.querySelectorAll("img.zine-cover[data-cover-pdf]").forEach(function(img){
-      var pdfUrl = img.getAttribute("data-cover-pdf");
-      if(pdfUrl) renderCoverFromPdf(pdfUrl, img);
+      renderCoverFromPdf(img.getAttribute("data-cover-pdf"), img);
     });
   }).catch(function(){
     box.innerHTML = '<p class="zine-empty">Couldn’t load issues right now &mdash; try again shortly.</p>';
