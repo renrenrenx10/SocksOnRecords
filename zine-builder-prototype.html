@@ -123,6 +123,12 @@ body:not(.authed) #app{display:none}
 .el.selected .shape{outline:1.5px solid var(--accent);outline-offset:1px}
 .el.crossword .shape{flex-direction:column;align-items:stretch;justify-content:flex-start;text-align:left;padding:4%;background:#f7f5ee;color:#171510;gap:3%;font-family:"Special Elite","Courier New",monospace}
 .cwEmpty{font-size:.8em;opacity:.65;margin:0}
+.cwRow{display:flex;gap:6px;margin:0 0 8px}
+.cwRow input.cwWord{flex:0 0 30%;min-width:0}
+.cwRow input.cwClue{flex:1;min-width:0}
+.cwRow input{font:inherit;font-size:13px;background:none;border:1.5px solid var(--line);color:var(--fg);padding:7px 8px;box-sizing:border-box}
+.cwRow input.cwWord{text-transform:uppercase}
+.cwRow button.cwRemove{flex:0 0 auto;font-size:14px;background:none;border:1px solid var(--line);color:var(--fg);width:30px;cursor:pointer}
 .cwClues{display:flex;gap:6%;font-size:.66em;line-height:1.28;flex:0 0 auto}
 .cwClues .cwCol{flex:1;min-width:0}
 .cwClues h4{margin:0 0 2px;font-size:.92em;text-transform:uppercase;letter-spacing:.04em;font-family:'Anton',Impact,sans-serif;font-weight:400}
@@ -131,7 +137,7 @@ body:not(.authed) #app{display:none}
 .cwGrid{display:grid;width:100%;flex:0 0 auto;margin-top:3%;border:1.5px solid currentColor;background:currentColor;gap:1px}
 .cwCell{position:relative;background:#fff}
 .cwCell.block{background:#171510}
-.cwCell .num{position:absolute;top:0;left:1px;font-size:.3em;line-height:1;font-family:'Space Mono',monospace}
+.cwCell .num{position:absolute;top:0;left:2px;font-size:.6em;line-height:1;font-weight:700;font-family:'Space Mono',monospace}
 .el.crossword.inverted .shape{background:#171510;color:#f7f5ee}
 .el.crossword.inverted .cwCell{background:#2a2820}
 .el.crossword.inverted .cwCell.block{background:#f7f5ee}
@@ -389,8 +395,11 @@ body:not(.authed) #app{display:none}
     <button id="crosswordClose">Close</button>
   </div>
   <div class="drawerBody">
-    <p class="drawerHint">One word per line, as <strong>WORD - clue</strong>. Words lock together on shared letters where they can; anything that won't fit gets flagged below so you can tweak it and regenerate.</p>
-    <textarea id="cwInput" rows="10" placeholder="SOCKS - What this label's named after&#10;PUNK - The genre, obviously&#10;GIG - Where you'll hear it live" style="width:100%;font:inherit;background:none;border:1.5px solid var(--line);color:var(--fg);padding:8px;resize:vertical;box-sizing:border-box"></textarea>
+    <p class="drawerHint">A word and its clue per row. Words lock together on shared letters where they can; anything that won't fit gets flagged below so you can tweak it and regenerate.</p>
+    <div id="cwRows"></div>
+    <div class="ctl" style="margin-top:4px">
+      <button id="cwAddRowBtn" type="button">+ Add word</button>
+    </div>
     <div class="ctl" style="margin-top:8px">
       <button id="cwGenerateBtn">Generate crossword</button>
     </div>
@@ -1580,30 +1589,57 @@ body:not(.authed) #app{display:none}
   // no network dependency, so it's easy to test standalone.
 
   var cwEditingId = null; // id of the element being regenerated, or null when adding a new piece
+  var cwRowsEl = document.getElementById("cwRows");
+
+  // One row = one word + its clue, as two separate inputs rather than a single "WORD - clue"
+  // line -- easier to fill in by hand (no typing a separator) and easier to edit afterwards.
+  function addCwRow(word, clue){
+    var row = document.createElement("div");
+    row.className = "cwRow";
+    var wordInput = document.createElement("input");
+    wordInput.type = "text"; wordInput.className = "cwWord"; wordInput.placeholder = "WORD"; wordInput.maxLength = 20;
+    wordInput.value = word || "";
+    var clueInput = document.createElement("input");
+    clueInput.type = "text"; clueInput.className = "cwClue"; clueInput.placeholder = "Clue";
+    clueInput.value = clue || "";
+    var removeBtn = document.createElement("button");
+    removeBtn.type = "button"; removeBtn.className = "cwRemove"; removeBtn.title = "Remove this word"; removeBtn.textContent = "✕";
+    removeBtn.addEventListener("click", function(){ row.remove(); });
+    row.appendChild(wordInput); row.appendChild(clueInput); row.appendChild(removeBtn);
+    cwRowsEl.appendChild(row);
+  }
+  document.getElementById("cwAddRowBtn").addEventListener("click", function(){ addCwRow(); });
 
   function openCrosswordPanel(existing){
     cwEditingId = existing ? existing.id : null;
-    document.getElementById("cwInput").value = existing ? (existing.cwInput || "") : "";
+    cwRowsEl.innerHTML = "";
+    var rows = (existing && existing.cwRows) || [];
+    if(rows.length){ rows.forEach(function(r){ addCwRow(r.word, r.clue); }); }
+    else { addCwRow(); addCwRow(); addCwRow(); }
     var statusEl = document.getElementById("cwStatus");
     statusEl.textContent = "";
     statusEl.className = "mini-note";
     openPanel(crosswordPanel);
   }
 
-  // Parses one "WORD - clue" entry per line (hyphen or en/em dash). Words are uppercased and
-  // stripped to A-Z; anything too short, clueless, unparseable, or a duplicate word is skipped.
-  function parseCwLines(raw){
+  function collectCwRows(){
+    return Array.prototype.map.call(cwRowsEl.querySelectorAll(".cwRow"), function(row){
+      return { word: row.querySelector(".cwWord").value, clue: row.querySelector(".cwClue").value };
+    });
+  }
+
+  // Turns the raw word+clue rows into valid entries. Words are uppercased and stripped to A-Z;
+  // a blank row is ignored silently, anything too short, clueless, or a duplicate word is flagged.
+  function parseCwRows(rows){
     var seen = {};
     var entries = [];
     var skipped = [];
-    raw.split(/\n/).forEach(function(line){
-      line = line.trim();
-      if(!line) return;
-      var m = line.match(/^(.+?)\s*[-–—]\s*(.+)$/);
-      if(!m){ skipped.push(line); return; }
-      var word = m[1].toUpperCase().replace(/[^A-Z]/g, "");
-      var clue = m[2].trim();
-      if(word.length < 2 || !clue){ skipped.push(line); return; }
+    rows.forEach(function(r){
+      var wordRaw = (r.word || "").trim();
+      var clue = (r.clue || "").trim();
+      if(!wordRaw && !clue) return; // fully blank row -- not worth flagging
+      var word = wordRaw.toUpperCase().replace(/[^A-Z]/g, "");
+      if(word.length < 2 || !clue){ skipped.push(wordRaw || clue); return; }
       if(seen[word]){ return; } // silent de-dupe, first clue wins
       seen[word] = true;
       entries.push({ word: word, clue: clue });
@@ -1764,12 +1800,12 @@ body:not(.authed) #app{display:none}
   }
 
   document.getElementById("cwGenerateBtn").addEventListener("click", function(){
-    var raw = document.getElementById("cwInput").value;
+    var rows = collectCwRows();
     var statusEl = document.getElementById("cwStatus");
-    var parsed = parseCwLines(raw);
+    var parsed = parseCwRows(rows);
 
     if(parsed.entries.length < 2){
-      statusEl.textContent = 'Add at least two valid "WORD - clue" lines.';
+      statusEl.textContent = "Add at least two words, each with a clue.";
       statusEl.className = "mini-note warn";
       return;
     }
@@ -1786,7 +1822,7 @@ body:not(.authed) #app{display:none}
       msgParts.push("Couldn't fit: " + result.unplaced.map(function(u){ return u.word; }).join(", ") + " — try reordering or tweaking the words, then regenerate.");
     }
     if(parsed.skipped.length){
-      msgParts.push(parsed.skipped.length + " line(s) skipped (needs \"WORD - clue\").");
+      msgParts.push(parsed.skipped.length + " row(s) skipped (needs both a word and a clue).");
     }
     statusEl.textContent = msgParts.length ? msgParts.join(" ") : ("Placed all " + result.placements.length + " words.");
     statusEl.className = msgParts.length ? "mini-note warn" : "mini-note";
@@ -1796,7 +1832,9 @@ body:not(.authed) #app{display:none}
       e = addEl("crossword", Object.assign({}, ADD_DEFAULTS.crossword));
       cwEditingId = e.id;
     }
-    e.cwInput = raw;
+    // keep the raw rows (not just the parsed entries) so reopening the panel to edit shows
+    // exactly what was typed, blank rows and all skipped ones included
+    e.cwRows = rows.filter(function(r){ return (r.word||"").trim() || (r.clue||"").trim(); });
     e.cwData = result;
     updateDiv(e);
     renderLayers();
