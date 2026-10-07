@@ -121,6 +121,20 @@ body:not(.authed) #app{display:none}
 .el.photo .shape img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
 .el.photo .add{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:700 2.6cqw "Courier Prime",monospace;color:#6b6659;text-align:center;pointer-events:none}
 .el.selected .shape{outline:1.5px solid var(--accent);outline-offset:1px}
+.el.crossword .shape{flex-direction:column;align-items:stretch;justify-content:flex-start;text-align:left;padding:4%;background:#f7f5ee;color:#171510;gap:3%;font-family:"Special Elite","Courier New",monospace}
+.cwEmpty{font-size:.8em;opacity:.65;margin:0}
+.cwClues{display:flex;gap:6%;font-size:.66em;line-height:1.28;flex:0 0 auto}
+.cwClues .cwCol{flex:1;min-width:0}
+.cwClues h4{margin:0 0 2px;font-size:.92em;text-transform:uppercase;letter-spacing:.04em;font-family:'Anton',Impact,sans-serif;font-weight:400}
+.cwClues ol{margin:0;padding-left:1.15em}
+.cwClues li{margin:0 0 1px}
+.cwGrid{display:grid;width:100%;flex:0 0 auto;margin-top:3%;border:1.5px solid currentColor;background:currentColor;gap:1px}
+.cwCell{position:relative;background:#fff}
+.cwCell.block{background:#171510}
+.cwCell .num{position:absolute;top:0;left:1px;font-size:.3em;line-height:1;font-family:'Space Mono',monospace}
+.el.crossword.inverted .shape{background:#171510;color:#f7f5ee}
+.el.crossword.inverted .cwCell{background:#2a2820}
+.el.crossword.inverted .cwCell.block{background:#f7f5ee}
 .handle{position:absolute;width:28px;height:28px;border:2px solid var(--bg);border-radius:50%;cursor:nwse-resize;display:none;font-size:13px;align-items:center;justify-content:center;color:#fff;line-height:1;touch-action:none;z-index:5}
 .handle.resize{right:-13px;bottom:-13px;background:var(--accent)}
 .handle.rotate{left:50%;top:-36px;transform:translateX(-50%);background:#2e6b4f;cursor:grab}
@@ -260,6 +274,7 @@ body:not(.authed) #app{display:none}
         <button data-add="bolt">+ Lightning bolt</button>
         <button id="addGigBtn">+ Gig listing</button>
         <button id="addReleaseBtn">+ Release listing</button>
+        <button id="addCrosswordBtn">+ Crossword</button>
       </div>
     </section>
 
@@ -368,6 +383,21 @@ body:not(.authed) #app{display:none}
   </div>
 </div>
 
+<div id="crosswordPanel" class="sheet">
+  <div class="drawerHead">
+    <strong>Crossword generator</strong>
+    <button id="crosswordClose">Close</button>
+  </div>
+  <div class="drawerBody">
+    <p class="drawerHint">One word per line, as <strong>WORD - clue</strong>. Words lock together on shared letters where they can; anything that won't fit gets flagged below so you can tweak it and regenerate.</p>
+    <textarea id="cwInput" rows="10" placeholder="SOCKS - What this label's named after&#10;PUNK - The genre, obviously&#10;GIG - Where you'll hear it live" style="width:100%;font:inherit;background:none;border:1.5px solid var(--line);color:var(--fg);padding:8px;resize:vertical;box-sizing:border-box"></textarea>
+    <div class="ctl" style="margin-top:8px">
+      <button id="cwGenerateBtn">Generate crossword</button>
+    </div>
+    <p id="cwStatus" class="mini-note" style="margin:6px 0 0;min-height:1em"></p>
+  </div>
+</div>
+
 <div id="aboutPanel" class="sheet">
   <div class="drawerHead">
     <strong>About this builder</strong>
@@ -428,6 +458,7 @@ body:not(.authed) #app{display:none}
   function uid(){ return Math.random().toString(36).slice(2,9); }
   function byId(id){ return els.find(function(x){ return x.id===id; }); }
   function rnd(min,max){ return min + Math.random()*(max-min); }
+  function escapeHtml(s){ var d = document.createElement("div"); d.textContent = s==null ? "" : String(s); return d.innerHTML; }
 
   // --- Supabase: pages are shared with, and saved through, the same project as the
   // Socks On Records site, so contributor logins are the same accounts. ---
@@ -1080,7 +1111,8 @@ body:not(.authed) #app{display:none}
   var layersPanel = document.getElementById("layersPanel");
   var gigPanel = document.getElementById("gigPanel");
   var releasePanel = document.getElementById("releasePanel");
-  var panels = [drawer, aboutPanel, pagesPanel, layersPanel, gigPanel, releasePanel];
+  var crosswordPanel = document.getElementById("crosswordPanel");
+  var panels = [drawer, aboutPanel, pagesPanel, layersPanel, gigPanel, releasePanel, crosswordPanel];
   function openPanel(panel){
     panels.forEach(function(p){ p.classList.remove("open"); });
     panel.classList.add("open");
@@ -1099,6 +1131,8 @@ body:not(.authed) #app{display:none}
   document.getElementById("gigClose").addEventListener("click", closeDrawer);
   document.getElementById("addReleaseBtn").addEventListener("click", function(){ openPanel(releasePanel); loadReleases(); });
   document.getElementById("releaseClose").addEventListener("click", closeDrawer);
+  document.getElementById("addCrosswordBtn").addEventListener("click", function(){ openCrosswordPanel(null); });
+  document.getElementById("crosswordClose").addEventListener("click", closeDrawer);
   backdrop.addEventListener("click", closeDrawer);
 
   // --- canvas sizing: measure the real space available and fit the portrait page into it (object-fit: contain) ---
@@ -1167,7 +1201,8 @@ body:not(.authed) #app{display:none}
     ticket:  { clip:"polygon(0% 0%,100% 0%,100% 35%,94% 50%,100% 65%,100% 100%,0% 100%,0% 65%,6% 50%,0% 35%)", font:"typewriter", bg:"#f7f5ee", fg:"#171510", baseCq:2.4, content:"ADMIT ONE — ONE NIGHT ONLY", align:"left", tilt:3 },
     stamp:   { border:"double", font:"anton", bg:"#f7f5ee", fg:"#171510", baseCq:3.6, content:"A+", align:"center", tilt:4.5 },
     outline: { border:"single", font:"typewriter", bg:"#f7f5ee", fg:"#171510", baseCq:2.6, content:"outlined note", align:"left", tilt:1.8 },
-    bolt:    { clip:"polygon(35% 0%, 65% 0%, 45% 40%, 72% 40%, 32% 100%, 42% 55%, 10% 55%)", font:"anton", bg:"#171510", fg:"#f1ede1", baseCq:3.4, content:"ZAP!", align:"center", tilt:5 }
+    bolt:    { clip:"polygon(35% 0%, 65% 0%, 45% 40%, 72% 40%, 32% 100%, 42% 55%, 10% 55%)", font:"anton", bg:"#171510", fg:"#f1ede1", baseCq:3.4, content:"ZAP!", align:"center", tilt:5 },
+    crossword: { font:"typewriter", bg:"#f7f5ee", fg:"#171510", baseCq:2.2, content:null, align:"left", tilt:1.5 }
   };
 
   function addEl(type, opts){
@@ -1187,7 +1222,7 @@ body:not(.authed) #app{display:none}
     els.push(e);
     createDiv(e);
     selectEl(e.id);
-    if(type!=="photo"){ enterEdit(e.id); }
+    if(type!=="photo" && type!=="crossword"){ enterEdit(e.id); }
     renderSelbar();
     renderLayers();
     return e;
@@ -1265,6 +1300,13 @@ body:not(.authed) #app{display:none}
       return;
     }
 
+    if(e.type === "crossword"){
+      div.classList.toggle("inverted", !!e.inverted);
+      renderCrosswordGrid(shapeEl, e);
+      scheduleSave();
+      return;
+    }
+
     // text-bearing shapes
     var clip = def.clip === "random-torn" ? e.textClip : (def.clip || "none");
     shapeEl.style.clipPath = clip;
@@ -1323,8 +1365,11 @@ body:not(.authed) #app{display:none}
   }
 
   function labelFor(e){
-    var typeName = { text:"Text", photo:"Photo", rect:"Bar", burst:"Burst", bubble:"Bubble", circle:"Circle", arrow:"Arrow", ticket:"Ticket", stamp:"Stamp", outline:"Note", bolt:"Bolt" }[e.type];
-    var detail = e.type==="photo" ? (e.content?"has image":"empty") : (e.content||"").slice(0,16);
+    var typeName = { text:"Text", photo:"Photo", rect:"Bar", burst:"Burst", bubble:"Bubble", circle:"Circle", arrow:"Arrow", ticket:"Ticket", stamp:"Stamp", outline:"Note", bolt:"Bolt", crossword:"Crossword" }[e.type];
+    var detail;
+    if(e.type==="photo"){ detail = e.content?"has image":"empty"; }
+    else if(e.type==="crossword"){ detail = (e.cwData && e.cwData.placements && e.cwData.placements.length) ? (e.cwData.placements.length+" words") : "empty"; }
+    else { detail = (e.content||"").slice(0,16); }
     return typeName+": "+detail+(e.filtered?"":" — clean");
   }
 
@@ -1366,9 +1411,15 @@ body:not(.authed) #app{display:none}
     selrow.innerHTML = "";
     var e = byId(selectedId);
     if(!e) return;
-    var isText = e.type !== "photo";
+    var isCrossword = e.type === "crossword";
+    var isText = e.type !== "photo" && !isCrossword;
 
-    if(isText){
+    if(isCrossword){
+      var editCwBtn = document.createElement("button");
+      editCwBtn.textContent = "Edit crossword";
+      editCwBtn.addEventListener("click", function(){ openCrosswordPanel(e); });
+      selbar.appendChild(editCwBtn);
+    } else if(isText){
       var editBtn = document.createElement("button");
       editBtn.textContent = "Edit text";
       editBtn.addEventListener("click", function(){ enterEdit(e.id); });
@@ -1427,6 +1478,14 @@ body:not(.authed) #app{display:none}
       scheduleSave();
     });
     selbar.appendChild(delBtn);
+
+    if(isCrossword){
+      var cwInvertBtn = document.createElement("button");
+      cwInvertBtn.textContent = "Invert colours";
+      cwInvertBtn.setAttribute("aria-pressed", String(e.inverted));
+      cwInvertBtn.addEventListener("click", function(){ e.inverted = !e.inverted; updateDiv(e); renderSelbar(); });
+      selrow.appendChild(cwInvertBtn);
+    }
 
     if(isText){
       var invertBtn = document.createElement("button");
@@ -1514,6 +1573,236 @@ body:not(.authed) #app{display:none}
     });
     input.click();
   }
+
+  // --- crossword generator ---------------------------------------------------------------
+  // One "piece" holds the whole puzzle: a clue list (top) and a generated grid (bottom).
+  // The grid is built from plain "WORD - clue" lines by a greedy word-placement algorithm --
+  // no network dependency, so it's easy to test standalone.
+
+  var cwEditingId = null; // id of the element being regenerated, or null when adding a new piece
+
+  function openCrosswordPanel(existing){
+    cwEditingId = existing ? existing.id : null;
+    document.getElementById("cwInput").value = existing ? (existing.cwInput || "") : "";
+    var statusEl = document.getElementById("cwStatus");
+    statusEl.textContent = "";
+    statusEl.className = "mini-note";
+    openPanel(crosswordPanel);
+  }
+
+  // Parses one "WORD - clue" entry per line (hyphen or en/em dash). Words are uppercased and
+  // stripped to A-Z; anything too short, clueless, unparseable, or a duplicate word is skipped.
+  function parseCwLines(raw){
+    var seen = {};
+    var entries = [];
+    var skipped = [];
+    raw.split(/\n/).forEach(function(line){
+      line = line.trim();
+      if(!line) return;
+      var m = line.match(/^(.+?)\s*[-–—]\s*(.+)$/);
+      if(!m){ skipped.push(line); return; }
+      var word = m[1].toUpperCase().replace(/[^A-Z]/g, "");
+      var clue = m[2].trim();
+      if(word.length < 2 || !clue){ skipped.push(line); return; }
+      if(seen[word]){ return; } // silent de-dupe, first clue wins
+      seen[word] = true;
+      entries.push({ word: word, clue: clue });
+    });
+    return { entries: entries, skipped: skipped };
+  }
+
+  function cwKey(x, y){ return x + "," + y; }
+
+  // Checks whether `word` can legally sit at (x,y) running in `dir` ("A"cross or "D"own)
+  // against the letters already placed in `cells`. Returns the intersection count (>=0) when
+  // valid, or null when it collides, runs off a letter, or butts straight up against another
+  // word with no separating blank cell.
+  function cwCanPlace(word, x, y, dir, cells){
+    var n = word.length;
+    var beforeKey = dir === "A" ? cwKey(x - 1, y) : cwKey(x, y - 1);
+    var afterKey = dir === "A" ? cwKey(x + n, y) : cwKey(x, y + n);
+    if(cells.has(beforeKey) || cells.has(afterKey)) return null;
+
+    var intersections = 0;
+    for(var i = 0; i < n; i++){
+      var cx = dir === "A" ? x + i : x;
+      var cy = dir === "A" ? y : y + i;
+      var existing = cells.get(cwKey(cx, cy));
+      if(existing !== undefined){
+        if(existing !== word[i]) return null;
+        intersections++;
+      } else {
+        var side1 = dir === "A" ? cwKey(cx, cy - 1) : cwKey(cx - 1, cy);
+        var side2 = dir === "A" ? cwKey(cx, cy + 1) : cwKey(cx + 1, cy);
+        if(cells.has(side1) || cells.has(side2)) return null;
+      }
+    }
+    return intersections;
+  }
+
+  // Greedy placement: longest word first as the anchor, then each remaining word (longest to
+  // shortest) is dropped at whichever valid, perpendicular intersection scores the most shared
+  // letters with what's already down. Anything that never finds a legal spot is reported back
+  // as unplaced rather than silently dropped.
+  function generateCrossword(entries){
+    var words = entries.slice().sort(function(a, b){ return b.word.length - a.word.length; });
+    var cells = new Map();
+    var placements = [];
+    var unplaced = [];
+
+    function place(word, clue, x, y, dir){
+      for(var i = 0; i < word.length; i++){
+        var cx = dir === "A" ? x + i : x;
+        var cy = dir === "A" ? y : y + i;
+        cells.set(cwKey(cx, cy), word[i]);
+      }
+      placements.push({ word: word, clue: clue, x: x, y: y, dir: dir });
+    }
+
+    words.forEach(function(entry, idx){
+      var word = entry.word, clue = entry.clue;
+      if(idx === 0){ place(word, clue, 0, 0, "A"); return; }
+
+      var best = null;
+      for(var li = 0; li < word.length; li++){
+        var letter = word[li];
+        for(var pi = 0; pi < placements.length; pi++){
+          var p = placements[pi];
+          for(var pj = 0; pj < p.word.length; pj++){
+            if(p.word[pj] !== letter) continue;
+            var sx = p.dir === "A" ? p.x + pj : p.x;
+            var sy = p.dir === "A" ? p.y : p.y + pj;
+            var newDir = p.dir === "A" ? "D" : "A";
+            var nx = newDir === "A" ? sx - li : sx;
+            var ny = newDir === "A" ? sy : sy - li;
+            var score = cwCanPlace(word, nx, ny, newDir, cells);
+            if(score !== null && (best === null || score > best.score)){
+              best = { x: nx, y: ny, dir: newDir, score: score };
+            }
+          }
+        }
+      }
+      if(best){ place(word, clue, best.x, best.y, best.dir); }
+      else { unplaced.push({ word: word, clue: clue }); }
+    });
+
+    if(!placements.length){ return { rows: 0, cols: 0, grid: [], placements: [], numberAt: {}, unplaced: unplaced }; }
+
+    // normalize so the bounding box starts at (0,0)
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    placements.forEach(function(p){
+      var n = p.word.length;
+      var endX = p.dir === "A" ? p.x + n - 1 : p.x;
+      var endY = p.dir === "A" ? p.y : p.y + n - 1;
+      minX = Math.min(minX, p.x, endX); maxX = Math.max(maxX, p.x, endX);
+      minY = Math.min(minY, p.y, endY); maxY = Math.max(maxY, p.y, endY);
+    });
+    placements.forEach(function(p){ p.x -= minX; p.y -= minY; });
+    var cols = maxX - minX + 1, rows = maxY - minY + 1;
+
+    var grid = [];
+    for(var r = 0; r < rows; r++){ grid.push(new Array(cols).fill(null)); }
+    placements.forEach(function(p){
+      for(var i = 0; i < p.word.length; i++){
+        var cx = p.dir === "A" ? p.x + i : p.x;
+        var cy = p.dir === "A" ? p.y : p.y + i;
+        grid[cy][cx] = p.word[i];
+      }
+    });
+
+    // standard numbering: a cell is numbered if it starts an across word and/or a down word
+    function hasLetter(cx, cy){ return cx >= 0 && cy >= 0 && cx < cols && cy < rows && !!grid[cy][cx]; }
+    var numberAt = {};
+    var nextNum = 1;
+    for(var y = 0; y < rows; y++){
+      for(var x = 0; x < cols; x++){
+        if(!hasLetter(x, y)) continue;
+        var startsAcross = !hasLetter(x - 1, y) && hasLetter(x + 1, y);
+        var startsDown = !hasLetter(x, y - 1) && hasLetter(x, y + 1);
+        if(startsAcross || startsDown){ numberAt[cwKey(x, y)] = nextNum++; }
+      }
+    }
+    placements.forEach(function(p){ p.number = numberAt[cwKey(p.x, p.y)]; });
+    placements.sort(function(a, b){ return a.number - b.number; });
+
+    return { rows: rows, cols: cols, grid: grid, placements: placements, numberAt: numberAt, unplaced: unplaced };
+  }
+
+  // Builds the clue lists + grid markup for a crossword piece's .shape node.
+  function renderCrosswordGrid(shapeEl, e){
+    var data = e.cwData;
+    if(!data || !data.placements || !data.placements.length){
+      shapeEl.innerHTML = '<div class="cwEmpty">Crossword — tap "Edit crossword" to add words and clues.</div>';
+      return;
+    }
+    var across = data.placements.filter(function(p){ return p.dir === "A"; });
+    var down = data.placements.filter(function(p){ return p.dir === "D"; });
+    function clueList(list){
+      return "<ol>" + list.map(function(p){
+        return '<li value="' + p.number + '">' + escapeHtml(p.clue) + "</li>";
+      }).join("") + "</ol>";
+    }
+    var html = '<div class="cwClues">' +
+      '<div class="cwCol"><h4>Across</h4>' + (across.length ? clueList(across) : '<p class="cwEmpty">—</p>') + '</div>' +
+      '<div class="cwCol"><h4>Down</h4>' + (down.length ? clueList(down) : '<p class="cwEmpty">—</p>') + '</div>' +
+    '</div>';
+
+    var cellsHtml = "";
+    for(var y = 0; y < data.rows; y++){
+      for(var x = 0; x < data.cols; x++){
+        var letter = data.grid[y][x];
+        if(!letter){
+          cellsHtml += '<div class="cwCell block"></div>';
+        } else {
+          var num = data.numberAt[cwKey(x, y)];
+          cellsHtml += '<div class="cwCell">' + (num ? '<span class="num">' + num + "</span>" : "") + "</div>";
+        }
+      }
+    }
+    html += '<div class="cwGrid" style="grid-template-columns:repeat(' + data.cols + ',1fr);grid-template-rows:repeat(' + data.rows + ',1fr);aspect-ratio:' + data.cols + "/" + data.rows + '">' + cellsHtml + "</div>";
+    shapeEl.innerHTML = html;
+  }
+
+  document.getElementById("cwGenerateBtn").addEventListener("click", function(){
+    var raw = document.getElementById("cwInput").value;
+    var statusEl = document.getElementById("cwStatus");
+    var parsed = parseCwLines(raw);
+
+    if(parsed.entries.length < 2){
+      statusEl.textContent = 'Add at least two valid "WORD - clue" lines.';
+      statusEl.className = "mini-note warn";
+      return;
+    }
+
+    var result = generateCrossword(parsed.entries);
+    if(!result.placements.length){
+      statusEl.textContent = "Couldn't place any words — try different ones.";
+      statusEl.className = "mini-note warn";
+      return;
+    }
+
+    var msgParts = [];
+    if(result.unplaced.length){
+      msgParts.push("Couldn't fit: " + result.unplaced.map(function(u){ return u.word; }).join(", ") + " — try reordering or tweaking the words, then regenerate.");
+    }
+    if(parsed.skipped.length){
+      msgParts.push(parsed.skipped.length + " line(s) skipped (needs \"WORD - clue\").");
+    }
+    statusEl.textContent = msgParts.length ? msgParts.join(" ") : ("Placed all " + result.placements.length + " words.");
+    statusEl.className = msgParts.length ? "mini-note warn" : "mini-note";
+
+    var e = cwEditingId && byId(cwEditingId);
+    if(!e){
+      e = addEl("crossword", Object.assign({}, ADD_DEFAULTS.crossword));
+      cwEditingId = e.id;
+    }
+    e.cwInput = raw;
+    e.cwData = result;
+    updateDiv(e);
+    renderLayers();
+    scheduleSave();
+    closeDrawer();
+  });
 
   // --- interaction state ---
   var gesture = null;
@@ -1649,7 +1938,8 @@ body:not(.authed) #app{display:none}
     ticket:  { x:12, y:10, w:76, h:14 },
     stamp:   { x:30, y:10, w:34, h:20 },
     outline: { x:12, y:10, w:76, h:18 },
-    bolt:    { x:34, y:10, w:30, h:30 }
+    bolt:    { x:34, y:10, w:30, h:30 },
+    crossword: { x:10, y:8, w:80, h:66 }
   };
   document.querySelectorAll(".toolbar button[data-add]").forEach(function(btn){
     btn.addEventListener("click", function(){
