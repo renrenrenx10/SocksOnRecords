@@ -65,6 +65,39 @@ body:not(.authed) #app{display:none}
 .page.stock-green{background:#dde7d6}
 .page.stock-yellow{background:#f2eac4}
 .page.stock-white{background:#f3efe2}
+.page.stock-scrap{
+  background-color:#ece7d8;
+  background-image:
+    radial-gradient(circle, rgba(110,100,80,.16) 1px, transparent 1.6px),
+    radial-gradient(circle, rgba(110,100,80,.11) 1px, transparent 1.6px),
+    radial-gradient(circle, rgba(170,75,40,.06) 1px, transparent 1.6px);
+  background-size: 37px 41px, 53px 59px, 71px 67px;
+  background-position: 0 0, 15px 20px, 35px 10px;
+}
+.page.stock-lined{
+  background-color:#f7f4ea;
+  background-image:
+    linear-gradient(to bottom, transparent 27px, rgba(90,110,165,.4) 27px, rgba(90,110,165,.4) 28px),
+    linear-gradient(to right, transparent 38px, rgba(195,75,70,.45) 38px, rgba(195,75,70,.45) 39px, transparent 39px);
+  background-size: 100% 28px, 100% 100%;
+  background-repeat: repeat, no-repeat;
+}
+.page.stock-graph{
+  background-color:#f3f6f1;
+  background-image:
+    linear-gradient(to bottom, rgba(110,145,170,.35) 1px, transparent 1px),
+    linear-gradient(to right, rgba(110,145,170,.35) 1px, transparent 1px);
+  background-size: 20px 20px, 20px 20px;
+}
+.page.stock-blackboard{
+  background-color:#223029;
+  background-image:
+    radial-gradient(circle, rgba(255,255,255,.06) 1px, transparent 1.4px),
+    radial-gradient(circle, rgba(255,255,255,.04) 1px, transparent 1.4px);
+  background-size: 47px 53px, 71px 61px;
+  background-position: 5px 8px, 20px 30px;
+}
+.page.stock-blackboard:empty::after{color:rgba(241,237,225,.55)}
 
 #selectionBar{flex:0 0 auto;border-top:1.5px solid var(--line);background:var(--card);padding:8px 0 calc(8px + env(safe-area-inset-bottom,0px))}
 #selectionBar[hidden]{display:none}
@@ -238,6 +271,10 @@ body:not(.authed) #app{display:none}
         <button class="swatch" data-stock="pink" style="background:#f1dde0" aria-pressed="false" aria-label="Pink"></button>
         <button class="swatch" data-stock="green" style="background:#dde7d6" aria-pressed="false" aria-label="Green"></button>
         <button class="swatch" data-stock="yellow" style="background:#f2eac4" aria-pressed="false" aria-label="Yellow"></button>
+        <button class="swatch" data-stock="scrap" style="background:#ddd6c2" aria-pressed="false" aria-label="Scrap"></button>
+        <button class="swatch" data-stock="lined" style="background:#eef1f6" aria-pressed="false" aria-label="Lined"></button>
+        <button class="swatch" data-stock="graph" style="background:#e3edf2" aria-pressed="false" aria-label="Graph"></button>
+        <button class="swatch" data-stock="blackboard" style="background:#28362f" aria-pressed="false" aria-label="Blackboard"></button>
       </div>
       <div class="ctl">
         <button id="cleanToggle" aria-pressed="false">Show clean (no copier)</button>
@@ -346,7 +383,7 @@ body:not(.authed) #app{display:none}
       <li>Tap a selected text piece again to edit the words.</li>
       <li>Change a piece's text size (S–XXL), font and colour (invert), and replace a photo any time.</li>
       <li>Turn the photocopier harshness up or down for the whole page, or keep one piece "clean" while the rest gets copied.</li>
-      <li>Reorder layers front-to-back, delete a piece, and pick the paper colour.</li>
+      <li>Reorder layers front-to-back, delete a piece, and pick the paper.</li>
       <li>Add pages, switch between them, reorder them, and give each one a title. Group pages into issues, like folders.</li>
       <li>Edit two facing pages as a spread (the "⇄" button next to a page in the Pages list) so an image or headline can run across the gutter — drag a piece past its own edge and it'll spill onto the facing page too.</li>
       <li>Everyone signed in can see every page.</li>
