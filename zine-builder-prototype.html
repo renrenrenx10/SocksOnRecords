@@ -2558,7 +2558,9 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     saveBtn.disabled = true;
     saveBtn.textContent = "Saving…";
     requestAnimationFrame(function(){
-      html2canvas(page, { backgroundColor: null, scale: 3, useCORS: true }).then(function(canvas){
+      html2canvas(page, { backgroundColor: null, scale: 3, useCORS: true })
+      .then(function(canvas){ return applyPhotocopyFilters(canvas, 3); })
+      .then(function(canvas){
         canvas.toBlob(function(blob){
           if(!blob){ alert("Couldn't export the image — try again, or take a screenshot instead."); return; }
           saveBlob(blob, "zine-page.png");
@@ -2595,13 +2597,59 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     ]);
   }
 
+  // html2canvas doesn't support the CSS `filter` property at all, so a page raster straight out
+  // of it silently drops the photocopier effect (and the drop-shadow) off every filtered piece --
+  // they come back in full, un-photocopied colour. The browser's own Canvas 2D context, though,
+  // DOES support `ctx.filter = "url(#copier)"`, referencing the exact same <filter> this page
+  // already uses live. So after the plain page raster comes back, re-render each filtered piece
+  // on its own (unrotated, so its html2canvas capture lines up with its un-rotated CSS box),
+  // run that capture through a canvas with the real filter applied, then paint the result back
+  // over the unfiltered pixels at the piece's actual position and rotation.
+  function applyPhotocopyFilters(canvas, scale){
+    var pageRect = page.getBoundingClientRect();
+    var mainCtx = canvas.getContext("2d");
+    var targets = els.filter(function(e){ return e.filtered && !globalClean && domMap[e.id]; });
+    var chain = Promise.resolve();
+    targets.forEach(function(e){
+      chain = chain.then(function(){
+        var div = domMap[e.id];
+        var prevTransform = div.style.transform;
+        div.style.transform = "none";
+        var rect = div.getBoundingClientRect();
+        return html2canvas(div, { backgroundColor: null, scale: scale, useCORS: true })
+          .then(function(sub){
+            div.style.transform = prevTransform;
+            if(rect.width <= 0 || rect.height <= 0) return;
+            var filterCanvas = document.createElement("canvas");
+            filterCanvas.width = sub.width;
+            filterCanvas.height = sub.height;
+            var fctx = filterCanvas.getContext("2d");
+            fctx.filter = "url(#copier)";
+            fctx.drawImage(sub, 0, 0);
+            var w = rect.width * scale, h = rect.height * scale;
+            var cx = (rect.left - pageRect.left) * scale + w/2;
+            var cy = (rect.top - pageRect.top) * scale + h/2;
+            mainCtx.save();
+            mainCtx.translate(cx, cy);
+            mainCtx.rotate(e.rot * Math.PI / 180);
+            mainCtx.drawImage(filterCanvas, -w/2, -h/2, w, h);
+            mainCtx.restore();
+          })
+          .catch(function(){ div.style.transform = prevTransform; }); // leave that one piece un-photocopied rather than fail the whole export
+      });
+    });
+    return chain.then(function(){ return canvas; });
+  }
+
   function pageCanvas(){
     selectEl(null);
     return new Promise(function(resolve, reject){
       requestAnimationFrame(function(){
         waitForImages(page).then(function(){
           setTimeout(function(){
-            html2canvas(page, { backgroundColor: "#ffffff", scale: 2.5, useCORS: true }).then(resolve).catch(reject);
+            html2canvas(page, { backgroundColor: "#ffffff", scale: 2.5, useCORS: true })
+              .then(function(canvas){ return applyPhotocopyFilters(canvas, 2.5); })
+              .then(resolve).catch(reject);
           }, 60); // small settle delay for fonts after images are ready
         });
       });
