@@ -333,10 +333,15 @@ async function saveRelease(form){
   let rid=id;
   if(!id)rid=ck(await db.from('releases').insert(row).select('id').single()).id;
   else ck(await db.from('releases').update(row).eq('id',id));
-  if(S.admin)ck(await db.from('release_bands').delete().eq('release_id',rid));
-  else if(S.mine.length)ck(await db.from('release_bands').delete().eq('release_id',rid).in('band_id',S.mine));
-  const links=picked.map(b=>({release_id:rid,band_id:b}));
-  if(links.length)ck(await db.from('release_bands').insert(links));
+  // one step on the server (11-releases-for-band-members.sql); the old delete-then-insert locked bands out of releases an admin made
+  const rp=await db.rpc('set_release_bands',{p_release:rid,p_bands:picked});
+  if(rp.error){
+    if(!/set_release_bands|schema cache|Could not find/i.test(rp.error.message||''))throw rp.error;
+    if(S.admin)ck(await db.from('release_bands').delete().eq('release_id',rid));
+    else if(S.mine.length)ck(await db.from('release_bands').delete().eq('release_id',rid).in('band_id',S.mine));
+    const links=picked.map(b=>({release_id:rid,band_id:b}));
+    if(links.length)ck(await db.from('release_bands').insert(links));
+  }
 }
 
 /* ----- featured release box (admin) ----- */
