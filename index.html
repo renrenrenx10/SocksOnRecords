@@ -184,6 +184,18 @@ const SKY='#86AEB9', INK='#16130F', RED='#C81F28', PAPER='#F4F0E6';
 
 /* ---------- live data (filled from Supabase) ---------- */
 let BANDS=[], GIGS=[], RELEASES=[];
+// Release order: newest first. Uses the release date if set, otherwise works the date out from the text ("Sep 2023", "2021").
+const MONTHS={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+function relKey(d,t){
+  if(d)return String(d).slice(0,10);
+  t=String(t||'');const y=(t.match(/\b(1[89]\d\d|20\d\d)\b/)||[])[1];if(!y)return '';
+  const m=(t.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b/i)||[])[1];
+  const dd=(t.match(/\b([0-3]?\d)(?:st|nd|rd|th)?\b(?=\s+(?:of\s+)?[A-Za-z])/)||[])[1];
+  const mm=m?MONTHS[m.toLowerCase()]:1,day=m&&dd&&+dd>=1&&+dd<=31&&dd!==y?+dd:1;
+  return y+'-'+String(mm).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+}
+function sortReleases(a){return a.slice().sort((x,y)=>(y.sortKey>x.sortKey?1:y.sortKey<x.sortKey?-1:0)||String(x.title).localeCompare(String(y.title)))}
+
 let READY=false, FAILED=false;
 let LIVE=false;
 
@@ -598,7 +610,7 @@ async function loadLive(){
     if(!res[0].length) throw new Error('bands table is empty');
     BANDS=res[0];
     GIGS=res[1].map(g=>Object.assign({},g,{acts:(g.gig_acts||[]).slice().sort((x,y)=>x.position-y.position).map(x=>({slug:x.bands?x.bands.slug:null,name:x.bands?x.bands.name:x.act_name}))}));
-    RELEASES=res[2].map(r=>({title:r.title,artist:r.artist_text||'',type:r.type,released_text:r.released_text,url:r.bandcamp_url,cover_url:r.cover_url,embed_url:r.embed_url,slugs:(r.release_bands||[]).map(x=>x.bands&&x.bands.slug).filter(Boolean)}));
+    RELEASES=sortReleases(res[2].map(r=>({sortKey:relKey(r.released_date,r.released_text),title:r.title,artist:r.artist_text||'',type:r.type,released_text:r.released_text,url:r.bandcamp_url,cover_url:r.cover_url,embed_url:r.embed_url,slugs:(r.release_bands||[]).map(x=>x.bands&&x.bands.slug).filter(Boolean)})));
     FEATURED=(res[3]&&res[3][0]&&res[3][0].value)||null;
     VIDEOS=res[4]||[];SESSIONS=res[5]||[];SHOP=Array.isArray(res[6])?res[6]:null;
     LIVE=true;READY=true;

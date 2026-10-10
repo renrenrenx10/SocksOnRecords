@@ -294,6 +294,15 @@ async function saveGig(form){
 }
 
 /* ----- releases (admin) ----- */
+const MONTHS={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+// works a date out from text like "Sep 2023", "10 April 2010" or "2021"; '' if there is no year
+function dateFromText(t){
+  t=String(t||'');const y=(t.match(/\b(1[89]\d\d|20\d\d)\b/)||[])[1];if(!y)return '';
+  const m=(t.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b/i)||[])[1];
+  const dd=(t.match(/\b([0-3]?\d)(?:st|nd|rd|th)?\b(?=\s+(?:of\s+)?[A-Za-z])/)||[])[1];
+  const mm=m?MONTHS[m.toLowerCase()]:1,day=m&&dd&&+dd>=1&&+dd<=31?+dd:1;
+  return y+'-'+String(mm).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+}
 const visReleases=()=>S.admin?S.releases:S.releases.filter(r=>r.created_by===S.user.id||(r.release_bands||[]).some(x=>S.mine.includes(x.band_id)));
 function releaseList(){
   const RL=visReleases();
@@ -314,7 +323,7 @@ function releaseForm(){
   <h2 class="disp" style="margin-bottom:18px">${isNew?'Add a release':'Edit '+esc(r.title)}</h2>
   <div class="g2">${F('Title','title',r.title,{req:1})}${F('Artist as shown','artist_text',r.artist_text,{ph:'Das Kapitans, or Various artists'})}
   ${F('Type','type',r.type,{ph:'album, EP, compilation, live'})}${F('Released (as shown)','released_text',r.released_text,{ph:'Sep 2023'})}
-  ${F('Release date (for ordering)','released_date',r.released_date,{type:'date'})}${F('Label','label',r.label,{ph:'Socks On Records'})}
+  ${F('Release date (for ordering)','released_date',r.released_date,{type:'date',hint:'Newest releases show first. If you leave this empty it is worked out from the text on the left.'})}${F('Label','label',r.label,{ph:'Socks On Records'})}
   ${F('Bandcamp link','bandcamp_url',r.bandcamp_url,{type:'url',ph:'https://…'})}${F('Cover image link','cover_url',r.cover_url,{type:'url',ph:'https://…'})}</div>
   ${hasRelCols()?`${F('Bandcamp player (optional)','embed_url',r.embed_url,{area:1,rows:2,hint:'Paste the Bandcamp embed code. Shows a player on the band page.'})}${F('About this release (optional)','description',r.description,{area:1,rows:4})}`:''}
   <div class="f"><span class="lab">${S.admin?'Which roster bands are on it?':'Which of your bands is this for?'}</span><div class="checks">${bl.map(b=>`<label class="chk"><input type="checkbox" name="rb" value="${b.id}"${on.has(b.id)?' checked':''}> ${esc(b.name)}</label>`).join('')}</div></div>
@@ -324,7 +333,7 @@ function releaseForm(){
 async function saveRelease(form){
   const id=form.dataset.id,d=new FormData(form);
   const row={title:nul(d.get('title')),artist_text:nul(d.get('artist_text')),type:nul(d.get('type')),released_text:nul(d.get('released_text')),
-    released_date:nul(d.get('released_date')),label:nul(d.get('label')),bandcamp_url:link(d.get('bandcamp_url')),cover_url:link(d.get('cover_url'))};
+    released_date:nul(d.get('released_date'))||dateFromText(d.get('released_text'))||null,label:nul(d.get('label')),bandcamp_url:link(d.get('bandcamp_url')),cover_url:link(d.get('cover_url'))};
   if(!row.title)throw new Error('A release needs a title');
   const allowed=myBands().map(b=>b.id),picked=d.getAll('rb').filter(b=>allowed.includes(b));
   if(!S.admin&&!picked.length)throw new Error('Tick which of your bands this release is for');

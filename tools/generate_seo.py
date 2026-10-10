@@ -28,9 +28,28 @@ def get(path):
     with urllib.request.urlopen(req, timeout=30) as r:
         return json.load(r)
 
+MONTHS = {m: i + 1 for i, m in enumerate("jan feb mar apr may jun jul aug sep oct nov dec".split())}
+
+def rel_key(r):
+    """Newest-first key: the release date if set, else worked out from the text ("Sep 2023", "2021")."""
+    if r.get("released_date"): return r["released_date"][:10]
+    t = r.get("released_text") or ""
+    y = re.search(r"\b(1[89]\d\d|20\d\d)\b", t)
+    if not y: return ""
+    m = re.search(r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b", t, re.I)
+    dd = re.search(r"\b([0-3]?\d)(?:st|nd|rd|th)?\b(?=\s+(?:of\s+)?[A-Za-z])", t)
+    day = int(dd.group(1)) if m and dd and 1 <= int(dd.group(1)) <= 31 else 1
+    return "%s-%02d-%02d" % (y.group(1), MONTHS[m.group(1).lower()] if m else 1, day)
+
+def sort_releases(rs):
+    rs = sorted(rs, key=lambda r: (r.get("title") or "").lower())
+    return sorted(rs, key=rel_key, reverse=True)
+
 def load():
     if "--from-json" in sys.argv:
-        return json.load(open(sys.argv[sys.argv.index("--from-json") + 1], encoding="utf-8"))
+        d = json.load(open(sys.argv[sys.argv.index("--from-json") + 1], encoding="utf-8"))
+        d["releases"] = sort_releases(d.get("releases") or [])
+        return d
     d = {}
     d["bands"] = get("bands?select=*&published=eq.true&order=sort_order.asc,name.asc")
     d["gigs"] = get("gigs?select=*,gig_acts(position,act_name,bands(slug,name))&order=event_date.asc")
@@ -40,6 +59,7 @@ def load():
                  ("shop", "shop_items?select=*&published=eq.true&order=sort_order.asc")):
         try: d[k] = get(q)
         except Exception as ex: print("skipped", k, ex); d[k] = []
+    d["releases"] = sort_releases(d["releases"])
     return d
 
 # ---------------------------------------------------------------- helpers
