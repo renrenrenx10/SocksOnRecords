@@ -3,7 +3,7 @@
 
 The main site is one interactive page, which search engines and link previews can't see into.
 This script reads the live data from Supabase and writes plain, fast, crawlable pages:
-  /roster/  /band/<slug>/  /gigs/  /releases/  /videos/  /sessions/  /merch/  /contact/  /404.html
+  /roster/  /band/<slug>/  /gigs/  /releases/  /videos/  /sessions/  /play/  /book/  /tacos/  /merch/  /contact/  /404.html
 plus sitemap.xml and robots.txt. It runs by itself every day on GitHub (see .github/workflows/seo.yml),
 or run it yourself:   python tools/generate_seo.py        (needs only Python 3, no installs)
 To test without the network:   python tools/generate_seo.py --from-json sample.json
@@ -81,7 +81,8 @@ def fmt_date(s):
 def ld(obj): return '<script type="application/ld+json">' + json.dumps(obj, ensure_ascii=False).replace("</", "<\\/") + "</script>"
 
 NAV = [("roster", "Roster"), ("gigs", "Gigs"), ("releases", "Releases"), ("videos", "Videos"),
-       ("sessions", "Sessions"), ("https://socksonrecords.bigcartel.com/", "Merch"), ("contact", "Contact")]
+       ("sessions", "Sessions"), ("play", "Play a show"), ("book", "Book a band"), ("https://socksonrecords.bigcartel.com/", "Merch"),
+       ("tacos", "Tacos &amp; Flipflops"), ("contact", "Contact")]
 
 def page(path, title, desc, body, image=None, jsonld=None, og_type="website", spa=None, noindex=False):
     url = SITE + "/" + path
@@ -261,6 +262,25 @@ def build(d):
         '<meta name="robots" content="noindex"><link rel="canonical" href="https://socksonrecords.bigcartel.com/">'
         '<meta http-equiv="refresh" content="0; url=https://socksonrecords.bigcartel.com/"></head>'
         '<body><p><a href="https://socksonrecords.bigcartel.com/">Socks On Records merch on Big Cartel</a></p></body></html>')
+
+    # --- play a show / book a band / tacos (the forms live in the interactive site)
+    urls.append(page("play/", "Wanna play a show? Bands, get in touch",
+        "Want to play a gig with Socks On Records in Peterborough or King's Lynn? Tell us about your band and send us some music.",
+        '<h1>Wanna play a show?</h1><p class="lead">We put on DIY punk gigs across Peterborough and King\'s Lynn and we are always after new bands.</p>'
+        '<p>Tell us who you are, where you are from and send us a link to your music. We read everything, and we are a few mates doing this for the love of it, so give us a little time to reply.</p><p><a class="btn" href="/#/play">Fill in the form</a></p>', spa="#/play"))
+    urls.append(page("book/", "Book a band: promoters and venues",
+        "Promoters and venues: book a Socks On Records band for your night. Tell us the date, venue and who you would like.",
+        '<h1>Book a band</h1><p class="lead">Want one of our bands on your bill?</p>'
+        '<p>Tell us about the night, the date and venue, and which of our <a href="/roster/">bands</a> you would like. We will pass it on and come back to you.</p><p><a class="btn" href="/#/book">Fill in the form</a></p>', spa="#/book"))
+    urls.append(page("tacos/", "Tacos & Flipflops: street food from Peterborough",
+        "Tacos & Flipflops: Mexican, Central and South American inspired street food from Peterborough with a plant-based twist. Part of the Socks On family.",
+        '<h1>Tacos &amp; Flipflops</h1><p class="lead">Part of the Socks On family.</p>'
+        '<p>Mexican, Central and South American inspired street food from Peterborough, with a plant-based twist. Run by the Loco Taco Duo.</p>'
+        '<ul><li><strong>The cafe:</strong> their own taco cafe at 17 Godric Square, Peterborough (PE2 7JL).</li>'
+        '<li><strong>Street food:</strong> pubs, events and festivals since 2019.</li>'
+        '<li><strong>Catering:</strong> event buffets, and the Taco Shack for festival-style weddings and parties.</li></ul>'
+        '<p><a class="btn" href="https://tacosandflipflops-23457721184.mywebsite.im/">Visit their website</a> '
+        '<a class="btn" href="https://tacosandflipflops-23457721184.mywebsite.im/gallery">See the food</a></p>', spa="#/tacos"))
 
     # --- contact
     urls.append(page("contact/", "Contact", "Get in touch with Socks On Records: gigs, releases, press and bands. Email socksonrecords@gmail.com or message us on Instagram.",

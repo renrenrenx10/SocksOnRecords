@@ -41,10 +41,10 @@ img{display:block;max-width:100%}
 .wrap{max-width:1160px;margin:0 auto;padding:0 24px}
 .ribbon{background:var(--red);color:var(--paper);text-align:center;padding:8px 16px}
 .banner{background:var(--ink);border-bottom:5px solid var(--sky)}
-.banner .wrap{display:flex;align-items:center;justify-content:space-between;gap:8px 24px;flex-wrap:wrap;padding-top:10px;padding-bottom:10px}
+.banner .wrap{display:flex;align-items:center;justify-content:space-between;gap:8px 20px;flex-wrap:wrap;padding-top:10px;padding-bottom:10px}
 .banner .logo{display:block;width:150px;flex:none}
-.nav{display:flex;align-items:center;flex-wrap:wrap;gap:0 24px}
-.nav a{font-family:'Anton',Impact,sans-serif;text-transform:uppercase;font-size:19px;letter-spacing:.03em;color:var(--paper);text-decoration:none;min-height:44px;display:inline-flex;align-items:center;border-bottom:3px solid transparent;padding-top:3px}
+.nav{display:flex;align-items:center;flex-wrap:wrap;gap:0 20px;flex:1 1 520px;justify-content:flex-end}
+.nav a{font-family:'Anton',Impact,sans-serif;text-transform:uppercase;font-size:18px;letter-spacing:.02em;color:var(--paper);text-decoration:none;min-height:44px;display:inline-flex;align-items:center;border-bottom:3px solid transparent;padding-top:3px}
 .nav a:hover,.nav a.on{border-bottom-color:var(--red)}
 .nav a.ext:after{content:"\2197";font-size:14px;margin-left:4px;font-family:'Archivo',sans-serif}
 .stripes{width:56px;height:16px;background:repeating-linear-gradient(var(--red) 0 4px,transparent 4px 6px);flex:none}
@@ -140,6 +140,7 @@ img{display:block;max-width:100%}
 .gig{grid-template-columns:minmax(0,1fr)}.gig .date{flex-direction:row;justify-content:flex-start;align-items:baseline;gap:14px;padding:14px 20px}.gig .date .d{font-size:48px}.gig .body{padding:22px 20px}
 .grow{grid-template-columns:minmax(0,1fr)}
 }
+@media (max-width:760px){.nav{justify-content:flex-start;flex-basis:100%}}
 @media (max-width:520px){.g6{grid-template-columns:repeat(2,minmax(0,1fr))}.g4{gap:18px}.sec{padding:48px 0}.banner .logo{width:120px}.nav{gap:0 16px}.nav a{font-size:17px}}
 @media (max-width:900px){.gig.hasp{grid-template-columns:minmax(0,1fr)}.gig .poster{border-left:0;border-top:2px solid var(--ink)}.gig .poster img{height:auto;max-height:520px;object-fit:contain}}
 </style>
@@ -156,7 +157,10 @@ img{display:block;max-width:100%}
 <a data-p="releases" href="#/releases">Releases</a>
 <a data-p="videos" href="#/videos">Videos</a>
 <a data-p="sessions" href="#/sessions">Sessions</a>
+<a data-p="play" href="#/play">Play a show</a>
+<a data-p="book" href="#/book">Book a band</a>
 <a class="ext" href="https://socksonrecords.bigcartel.com/">Merch</a>
+<a data-p="tacos" href="#/tacos">Tacos &amp; Flipflops</a>
 <a data-p="contact" href="#/contact">Contact</a>
 <a class="ext" href="https://www.instagram.com/socksongraphics/">Graphics</a>
 <a href="https://www.instagram.com/socks_on_records/" aria-label="Socks On Records on Instagram"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg></a>
@@ -168,7 +172,7 @@ img{display:block;max-width:100%}
 <footer class="footer"><div class="wrap">
 <div class="g3" style="align-items:start">
 <div><img src="img/logo.png" alt="Socks On Records" style="width:200px"><p style="margin-top:16px;max-width:300px">DIY label, gig promoters and community. Totally non-profit.</p></div>
-<div><h3 class="disp">Explore</h3><a class="flink" href="#/roster">Roster</a><a class="flink" href="#/gigs">Gigs</a><a class="flink" href="#/releases">Releases</a><a class="flink" href="#/videos">Videos</a><a class="flink" href="#/sessions">Sessions</a><a class="flink" href="https://socksonrecords.bigcartel.com/">Merch</a></div>
+<div><h3 class="disp">Explore</h3><a class="flink" href="#/roster">Roster</a><a class="flink" href="#/gigs">Gigs</a><a class="flink" href="#/releases">Releases</a><a class="flink" href="#/videos">Videos</a><a class="flink" href="#/sessions">Sessions</a><a class="flink" href="#/play">Play a show</a><a class="flink" href="#/book">Book a band</a><a class="flink" href="#/tacos">Tacos &amp; Flipflops</a><a class="flink" href="https://socksonrecords.bigcartel.com/">Merch</a></div>
 <div><h3 class="disp">Get in touch</h3><a class="flink" href="mailto:socksonrecords@gmail.com">socksonrecords@gmail.com</a><a class="flink" href="https://www.instagram.com/socks_on_records/">Instagram</a><a class="flink" href="https://www.instagram.com/socksongraphics/">Socks On Graphics</a></div>
 </div>
 <div class="mono" style="margin-top:40px;padding-top:20px;border-top:1px solid rgba(244,240,230,.25);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><span>Peterborough &amp; King's Lynn &middot; East of England</span><span>&copy; Socks On Records &middot; <a href="admin.html" style="opacity:.7">Band login</a></span></div>
@@ -542,6 +546,126 @@ async function subscribe(form){
   btn.disabled=false;
 }
 
+/* ---------- enquiry forms (play a show / book a band) and Tacos & Flipflops ---------- */
+const TF_SITE='https://tacosandflipflops-23457721184.mywebsite.im/';
+let BOOK_BANDS=[], FORM_T0=0;
+const NOTSURE='Not sure yet, suggest someone';
+function fld(id,label,o){o=o||{};
+  const req=o.req?' <span style="color:var(--red)" aria-hidden="true">*</span>':'';
+  const attrs=`id="${id}" name="${id}"${o.req?' required aria-required="true"':''}${o.auto?` autocomplete="${o.auto}"`:''}${o.ph?` placeholder="${esc(o.ph)}"`:''}${o.max?` maxlength="${o.max}"`:''}`;
+  const inp=o.area?`<textarea ${attrs}${o.rows?` style="min-height:${o.rows*30+30}px"`:''}></textarea>`:`<input ${attrs} type="${o.type||'text'}"${o.min?` min="${o.min}"`:''}${o.mode?` inputmode="${o.mode}"`:''}>`;
+  return `<div class="field"><label for="${id}">${label}${req}</label>${inp}${o.hint?`<span class="mono" style="color:var(--muted);font-size:12px;text-transform:none">${o.hint}</span>`:''}</div>`}
+const hpField='<div class="hp" aria-hidden="true"><label>Leave this empty<input type="text" id="f-web" tabindex="-1" autocomplete="off"></label></div>';
+const fixLink=v=>{v=(v||'').trim();return v&&!/^[a-z][a-z0-9+.-]*:/i.test(v)&&/^[^\s@]+\.[^\s@]{2,}/.test(v)?'https://'+v:v};
+const nul2=v=>{v=(v||'').trim();return v||null};
+const sideCard=(k,t,body)=>`<aside class="card" style="padding:28px 26px"><div class="tape"></div><p class="mono" style="color:var(--red);margin-bottom:10px">${k}</p><h3 class="disp" style="font-size:30px;margin-bottom:10px">${t}</h3>${body}</aside>`;
+function playPage(){
+  FORM_T0=Date.now();
+  return head('For bands','Wanna play a show?',"We put on gigs across Peterborough and King's Lynn and we're always after new bands. Tell us who you are and send us some music.")+`
+<section style="padding:72px 0 96px"><div class="wrap"><div class="split rev">
+<form class="card" id="play-form" novalidate style="padding:36px 32px"><div class="tape"></div>
+${fld('f-band','Band',{req:1,auto:'organization',max:150})}
+${fld('f-name','Your name',{req:1,auto:'name',max:150})}
+${fld('f-email','Email',{req:1,type:'email',auto:'email',max:200})}
+${fld('f-music','Link to your music',{req:1,mode:'url',ph:'Bandcamp, Spotify, YouTube, SoundCloud…',max:500})}
+${fld('f-city','City or town',{req:1,max:150})}
+${fld('f-socials','Socials',{area:1,rows:2,ph:'Instagram, Facebook, website… paste your links',max:1000})}
+${fld('f-msg','Say hi',{area:1,rows:4,hint:'Tell us about the band, what you are after, anything at all.',max:4000})}
+${fld('f-recs','Recommend us a few bands',{area:1,rows:3,hint:'Who are you listening to at the moment? Who should we be putting on?',max:2000})}
+${hpField}
+<button class="btn red" type="submit">Send it</button>
+<p id="f-note" class="mono" role="status" hidden style="margin-top:18px"></p>
+<p class="mono" style="margin-top:16px;color:var(--muted);font-size:12px;text-transform:none">We only use these details to get back to you about gigs. We never share them. Fields marked * are needed.</p>
+</form>
+<div>${sideCard('How it works','No fuss',`<p style="margin-bottom:12px">We're a few mates doing this for the love of it, so give us a little time to reply. We read everything.</p><p style="margin-bottom:12px">DIY, non-profit and friendly. Bands from anywhere are welcome, the more different the better.</p><p>Prefer email? <a href="mailto:socksonrecords@gmail.com">socksonrecords@gmail.com</a></p>`)}</div>
+</div></div></section>`;
+}
+function bookPage(pre){
+  FORM_T0=Date.now();BOOK_BANDS=[];
+  const sorted=BANDS.slice().sort((a,b)=>a.name.localeCompare(b.name));
+  if(pre){const b=BANDS.find(x=>x.slug===pre);if(b)BOOK_BANDS.push(b.name)}
+  const today=new Date();const min=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+  return head('For promoters and venues','Book a band',"Want one of our bands on your bill? Tell us about the night and who you'd like, and we'll put you in touch.")+`
+<section style="padding:72px 0 96px"><div class="wrap"><div class="split rev">
+<form class="card" id="book-form" novalidate style="padding:36px 32px"><div class="tape"></div>
+${fld('f-who','Who are you?',{req:1,ph:'Your name, and the promoter, venue or night you run',max:300})}
+${fld('f-contact','Contact',{req:1,mode:'email',ph:'Email or phone number',auto:'email',max:300})}
+<div class="field"><label for="f-pick">Which band(s)? <span style="color:var(--red)" aria-hidden="true">*</span></label>
+<div style="display:flex;gap:10px;flex-wrap:wrap"><select id="f-pick" style="flex:1 1 220px"><option value="">Choose a band…</option>${sorted.map(b=>`<option value="${esc(b.name)}">${esc(b.name)}</option>`).join('')}<option value="${NOTSURE}">${NOTSURE}</option></select><button class="btn small" type="button" id="f-add">Add</button></div>
+<div id="f-chips" aria-live="polite" style="margin-top:6px"></div>
+<span class="mono" style="color:var(--muted);font-size:12px;text-transform:none">Pick one and press Add. Add as many as you like.</span></div>
+${fld('f-date','Date',{type:'date',min,hint:'Roughly is fine. If it is not set yet, say so in the details.'})}
+${fld('f-venue','Venue and city',{req:1,max:300})}
+${fld('f-details','Details',{area:1,rows:5,hint:'Capacity, set times, fee or door split, travel, anything else we should know.',max:4000})}
+${fld('f-socials','Links to your socials',{area:1,rows:2,ph:'Your venue, night or promoter page',max:1000})}
+${fld('f-others','Other bands on the bill',{area:1,rows:2,hint:'Leave blank if you like, but we are nosy and would love to know.',max:2000})}
+${hpField}
+<button class="btn red" type="submit">Send it</button>
+<p id="f-note" class="mono" role="status" hidden style="margin-top:18px"></p>
+<p class="mono" style="margin-top:16px;color:var(--muted);font-size:12px;text-transform:none">We only use these details to get back to you about the booking. We never share them. Fields marked * are needed.</p>
+</form>
+<div>${sideCard('How it works','Over to the bands',`<p style="margin-bottom:12px">We pass your message to the band(s) and come back to you. Everyone here is doing this around jobs and lives, so give us a few days.</p><p style="margin-bottom:12px">Not sure who fits? Choose "${NOTSURE}" and tell us about the night.</p><p>Prefer email? <a href="mailto:socksonrecords@gmail.com">socksonrecords@gmail.com</a></p>`)}</div>
+</div></div></section>`;
+}
+function renderChips(){
+  const c=document.getElementById('f-chips');if(!c)return;
+  c.innerHTML=BOOK_BANDS.map((n,i)=>`<span class="chip" style="margin:6px 6px 0 0">${esc(n)} <button type="button" data-rm="${i}" aria-label="Remove ${esc(n)}" style="border:0;background:none;cursor:pointer;font-size:18px;line-height:1;padding:0 2px">&times;</button></span>`).join('');
+}
+function addPick(){
+  const s=document.getElementById('f-pick');if(!s||!s.value)return false;
+  if(!BOOK_BANDS.includes(s.value))BOOK_BANDS.push(s.value);
+  s.value='';renderChips();return true;
+}
+async function sendEnquiry(form,table,row){
+  const note=document.getElementById('f-note'),btn=form.querySelector('button[type=submit]');
+  const say=(t,bad)=>{note.hidden=false;note.textContent=t;note.style.color=bad?'var(--red)':'var(--ink)'};
+  const thanks=()=>{form.innerHTML=`<div class="tape"></div><h2 class="disp" style="font-size:40px;margin-bottom:12px">Got it, thanks!</h2><p style="margin-bottom:8px">${table==='play_requests'?"We'll have a listen and get back to you.":"We'll pass it on and get back to you."}</p><p>Anything urgent? <a href="mailto:socksonrecords@gmail.com">socksonrecords@gmail.com</a></p>`;window.scrollTo(0,0)};
+  if(document.getElementById('f-web').value||Date.now()-FORM_T0<2500){thanks();return}   // bots: pretend it worked
+  btn.disabled=true;
+  try{
+    const r=await fetch(SUPABASE_URL+'/rest/v1/'+table,{method:'POST',headers:{apikey:SUPABASE_KEY,'Content-Type':'application/json',Prefer:'return=minimal'},body:JSON.stringify(row)});
+    if(r.ok)thanks();else say('Something went wrong sending that. Please try again, or email socksonrecords@gmail.com.',true);
+  }catch(e){say('Something went wrong sending that. Please try again, or email socksonrecords@gmail.com.',true)}
+  btn.disabled=false;
+}
+function checkFields(form,ids){
+  const note=document.getElementById('f-note');
+  for(const [id,label] of ids){const el=document.getElementById(id);if(!el.value.trim()){note.hidden=false;note.style.color='var(--red)';note.textContent='Please fill in: '+label+'.';el.focus();return false}}
+  return true;
+}
+function submitPlay(form){
+  if(!checkFields(form,[['f-band','Band'],['f-name','Your name'],['f-email','Email'],['f-music','Link to your music'],['f-city','City or town']]))return;
+  const v=id=>document.getElementById(id).value;
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v('f-email').trim())){const n=document.getElementById('f-note');n.hidden=false;n.style.color='var(--red)';n.textContent='That email address does not look right.';document.getElementById('f-email').focus();return}
+  sendEnquiry(form,'play_requests',{band_name:v('f-band').trim(),contact_name:v('f-name').trim(),email:v('f-email').trim(),music_link:fixLink(v('f-music')),city:v('f-city').trim(),socials:nul2(v('f-socials')),message:nul2(v('f-msg')),recommendations:nul2(v('f-recs'))});
+}
+function submitBook(form){
+  addPick();
+  if(!checkFields(form,[['f-who','Who are you?'],['f-contact','Contact']]))return;
+  if(!BOOK_BANDS.length){const n=document.getElementById('f-note');n.hidden=false;n.style.color='var(--red)';n.textContent='Please choose at least one band and press Add.';document.getElementById('f-pick').focus();return}
+  if(!checkFields(form,[['f-venue','Venue and city']]))return;
+  const v=id=>document.getElementById(id).value;
+  sendEnquiry(form,'booking_requests',{who:v('f-who').trim(),contact:v('f-contact').trim(),bands:BOOK_BANDS.slice(),event_date:nul2(v('f-date')),venue:v('f-venue').trim(),details:nul2(v('f-details')),socials:nul2(v('f-socials')),other_bands:nul2(v('f-others'))});
+}
+function tacosPage(){
+  const tile=(k,t,b)=>`<article class="card" style="padding:32px 28px"><div class="tape"></div><p class="mono" style="color:var(--red);margin-bottom:10px">${k}</p><h3 class="disp" style="font-size:32px;margin-bottom:10px">${t}</h3><p>${b}</p></article>`;
+  return head('Part of the Socks On family','Tacos &amp; Flipflops','Mexican, Central and South American inspired street food from Peterborough, with a plant-based twist. Run by the Loco Taco Duo, and part of the Socks On family.')+`
+<section class="sec"><div class="wrap">
+<div class="g3">
+${tile('01 / The cafe','Come and eat','Their own taco cafe at 17 Godric Square, Peterborough (PE2 7JL). Tacos, burritos, nachos, quesadillas and more.')}
+${tile('02 / Street food','Pubs, events, festivals','Feeding hungry people at pubs, events and festivals since 2019. Look out for them at a pop-up near you.')}
+${tile('03 / Catering','Event buffets and the Taco Shack','Buffets for events, and the Taco Shack for festival-style weddings and parties. Get in touch for availability and a quote.')}
+</div>
+<div style="margin-top:48px;display:flex;gap:14px;flex-wrap:wrap">
+<a class="btn red" href="${TF_SITE}">Visit their website &#8599;</a>
+<a class="btn" href="${TF_SITE}gallery">See the food &#8599;</a>
+<a class="btn" href="${TF_SITE}reviews">Read the reviews &#8599;</a>
+<a class="btn" href="${TF_SITE}contact">Get in touch &#8599;</a>
+</div>
+<p class="mono" style="margin-top:22px;color:var(--muted);text-transform:none;font-size:13px">Opening times, menus and updates are on their own website and social media.</p>
+</div></section>`;
+}
+
 /* ---------- router ---------- */
 const view=document.getElementById('view');
 function route(){
@@ -556,12 +680,15 @@ function route(){
   else if(page==='videos') html=videosPage();
   else if(page==='sessions') html=sessionsPage();
   else if(page==='shop') html=shopPage();
+  else if(page==='play') html=playPage();
+  else if(page==='book') html=bookPage(parts[1]);
+  else if(page==='tacos') html=tacosPage();
   else if(page==='contact') html=contact();
   else { html=home(); key='home'; }
   view.innerHTML=html;
   view.querySelectorAll('.panel:not([hidden]) iframe[data-src]').forEach(i=>{i.src=i.dataset.src});
   document.querySelectorAll('.nav a[data-p]').forEach(x=>x.classList.toggle('on',x.dataset.p===(key==='band'?'roster':key)));
-  const names={home:'Home',roster:'Roster',band:'Band',gigs:'Gigs',releases:'Releases',videos:'Videos',sessions:'Socks On Sessions',shop:'Merch & Tickets',contact:'Contact'};
+  const names={home:'Home',roster:'Roster',band:'Band',gigs:'Gigs',releases:'Releases',videos:'Videos',sessions:'Socks On Sessions',shop:'Merch & Tickets',play:'Play a show',book:'Book a band',tacos:'Tacos & Flipflops',contact:'Contact'};
   if(key==='band'){const bb=BANDS.find(x=>x.slug===parts[1]);if(bb)names.band=bb.name}
   document.title=(key==='home'||!names[key])?"Socks On Records | DIY punk label, Peterborough & King's Lynn":names[key]+' | Socks On Records';
   window.scrollTo(0,0);
@@ -573,6 +700,12 @@ function route(){
     document.getElementById('c-note').hidden=false;});
   const nf=document.getElementById('n-form');
   if(nf) nf.addEventListener('submit',e=>{e.preventDefault();subscribe(nf)});
+  const pf=document.getElementById('play-form');
+  if(pf) pf.addEventListener('submit',e=>{e.preventDefault();submitPlay(pf)});
+  const bf=document.getElementById('book-form');
+  if(bf){renderChips();document.getElementById('f-add').addEventListener('click',addPick);
+    bf.addEventListener('submit',e=>{e.preventDefault();submitBook(bf)});
+    bf.addEventListener('click',e=>{const r=e.target.closest('[data-rm]');if(r){BOOK_BANDS.splice(+r.dataset.rm,1);renderChips()}})}
 }
 document.addEventListener('click',e=>{
   const yt=e.target.closest('[data-yt]');
