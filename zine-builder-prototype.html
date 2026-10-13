@@ -144,6 +144,16 @@ body:not(.authed) #app{display:none}
 .stickerGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .stickerGrid button{display:flex;flex-direction:column;align-items:center;gap:4px;background:var(--card);border:1.5px solid var(--line);color:var(--fg);padding:14px 4px;cursor:pointer;font-size:11px}
 .stickerGrid button .glyph{font-size:28px;line-height:1}
+.comicGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.comicGrid button{display:flex;flex-direction:column;align-items:center;gap:6px;background:var(--card);border:1.5px solid var(--line);color:var(--fg);padding:10px 8px;cursor:pointer;font-size:11px}
+.comicGrid .ccPreview{position:relative;width:100%;aspect-ratio:3/4;background:var(--bg);border:1px solid var(--line)}
+.comicGrid .ccPreview span{position:absolute;background:var(--card);border:2px solid var(--line);box-sizing:border-box}
+.el.comicgrid .shape{overflow:hidden;padding:0;background:#eeeae1}
+.ccCell{position:absolute;box-sizing:border-box;background:#f7f4ec;border:4px solid #171510;box-shadow:2px 2px 0 rgba(23,21,16,.18);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.ccCell img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+.ccCell .ccAdd{font:700 2.2cqw "Courier Prime",monospace;color:#6b6659;text-align:center;pointer-events:none;padding:6%}
+.ccCellBtns{display:flex;flex-wrap:wrap;gap:6px}
+.ccCellBtns button{font-size:11px}
 .el.qr .shape{padding:6%}
 .qrWrap{width:100%;height:100%;display:flex;align-items:center;justify-content:center}
 .qrSvg{width:100%;height:100%;display:block}
@@ -312,6 +322,7 @@ body:not(.authed) #app{display:none}
         <button id="addGigBtn">+ Gig listing</button>
         <button id="addReleaseBtn">+ Release listing</button>
         <button id="addCrosswordBtn">+ Crossword</button>
+        <button id="addComicGridBtn">+ Comic panels</button>
       </div>
     </section>
 
@@ -428,6 +439,17 @@ body:not(.authed) #app{display:none}
   <div class="drawerBody">
     <p class="drawerHint">Tap an icon to drop it on the page (or swap it for the one you've got selected).</p>
     <div class="stickerGrid" id="stickerGrid"></div>
+  </div>
+</div>
+
+<div id="comicPanel" class="sheet">
+  <div class="drawerHead">
+    <strong>Pick a panel layout</strong>
+    <button id="comicClose">Close</button>
+  </div>
+  <div class="drawerBody">
+    <p class="drawerHint">Tap a layout to drop it on the page. Once it's down, flip it horizontally or vertically from the selection bar for more arrangements -- or swap it for one of the other two.</p>
+    <div class="comicGrid" id="comicGrid"></div>
   </div>
 </div>
 
@@ -1217,7 +1239,8 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   var crosswordPanel = document.getElementById("crosswordPanel");
   var stickerPanel = document.getElementById("stickerPanel");
   var qrPanel = document.getElementById("qrPanel");
-  var panels = [drawer, aboutPanel, pagesPanel, layersPanel, gigPanel, releasePanel, crosswordPanel, stickerPanel, qrPanel];
+  var comicPanel = document.getElementById("comicPanel");
+  var panels = [drawer, aboutPanel, pagesPanel, layersPanel, gigPanel, releasePanel, crosswordPanel, stickerPanel, qrPanel, comicPanel];
   function openPanel(panel){
     panels.forEach(function(p){ p.classList.remove("open"); });
     panel.classList.add("open");
@@ -1242,6 +1265,8 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   document.getElementById("stickerClose").addEventListener("click", closeDrawer);
   document.getElementById("addQrBtn").addEventListener("click", function(){ openQrPanel(null); });
   document.getElementById("qrClose").addEventListener("click", closeDrawer);
+  document.getElementById("addComicGridBtn").addEventListener("click", function(){ openComicPanel(null); });
+  document.getElementById("comicClose").addEventListener("click", closeDrawer);
   backdrop.addEventListener("click", closeDrawer);
 
   // --- canvas sizing: measure the real space available and fit the portrait page into it (object-fit: contain) ---
@@ -1316,8 +1341,49 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     crossword: { font:"typewriter", bg:"#f7f5ee", fg:"#171510", baseCq:2.2, content:null, align:"left", tilt:1.5 },
     sticker: { font:null, bg:null, fg:null, baseCq:0, content:null, align:"center", tilt:3 },
     qr:      { font:null, bg:null, fg:null, baseCq:0, content:null, align:"center", tilt:1.5 },
-    doodle:  { font:null, bg:null, fg:null, baseCq:0, content:null, align:"center", tilt:0 }
+    doodle:  { font:null, bg:null, fg:null, baseCq:0, content:null, align:"center", tilt:0 },
+    comicgrid: { font:null, bg:null, fg:null, baseCq:0, content:null, align:"center", tilt:0 }
   };
+
+  // --- comic panel layouts: fixed sets of cell rectangles (x/y/w/h as % of the piece's own box)
+  // that a photo can be dropped into one at a time. Three base shapes, each mirrorable on either
+  // axis from the selection bar -- that's up to 4 distinct arrangements per shape without needing
+  // a bigger picker list. Row/column maths: rects.md working in /tmp during the mockup pass.
+  var COMIC_LAYOUTS = {
+    C: { label:"Newspaper", half:false, rects:[
+      {x:0,    y:0,    w:100,  h:37},
+      {x:0,    y:40,   w:48.5, h:28.5},
+      {x:51.5, y:40,   w:48.5, h:28.5},
+      {x:0,    y:71.5, w:48.5, h:28.5},
+      {x:51.5, y:71.5, w:48.5, h:28.5}
+    ]},
+    D: { label:"Collage", half:false, rects:[
+      {x:0,    y:0,  w:56.6, h:69},
+      {x:59.6, y:0,  w:40.4, h:33},
+      {x:59.6, y:36, w:40.4, h:33},
+      {x:0,    y:72, w:100,  h:28}
+    ]},
+    F: { label:"Half page", half:true, rects:[
+      {x:0,  y:0,    w:58, h:100},
+      {x:61, y:0,    w:39, h:48.5},
+      {x:61, y:51.5, w:39, h:48.5}
+    ]}
+  };
+  var COMIC_ADD_DEFAULTS = {
+    C: { x:5, y:5,  w:90, h:85 },
+    D: { x:5, y:5,  w:90, h:85 },
+    F: { x:8, y:28, w:84, h:44 }
+  };
+  function comicRects(key, flipH, flipV){
+    var def = COMIC_LAYOUTS[key] || COMIC_LAYOUTS.C;
+    return def.rects.map(function(r){
+      return {
+        x: flipH ? (100 - r.x - r.w) : r.x,
+        y: flipV ? (100 - r.y - r.h) : r.y,
+        w: r.w, h: r.h
+      };
+    });
+  }
 
   // --- stickers: small monochrome-friendly glyphs for the DIY cut-and-paste look. Rendered as
   // plain text glyphs (not images), so they scale, invert and photocopy-filter like everything else.
@@ -1348,7 +1414,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     els.push(e);
     createDiv(e);
     selectEl(e.id);
-    if(type!=="photo" && type!=="crossword" && type!=="sticker" && type!=="qr" && type!=="doodle"){ enterEdit(e.id); }
+    if(type!=="photo" && type!=="crossword" && type!=="sticker" && type!=="qr" && type!=="doodle" && type!=="comicgrid"){ enterEdit(e.id); }
     if(type==="doodle"){
       // land straight in draw mode -- a freshly-added doodle piece has nothing to move yet,
       // so dragging on it should start a stroke, not reposition the (empty) piece
@@ -1495,6 +1561,15 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       shapeEl.style.border = "none"; shapeEl.style.outline = "none";
       shapeEl.style.background = "transparent";
       renderDoodle(shapeEl, e);
+      scheduleSave();
+      return;
+    }
+
+    if(e.type === "comicgrid"){
+      shapeEl.style.clipPath = "none";
+      shapeEl.style.borderRadius = "0";
+      shapeEl.style.border = "none"; shapeEl.style.outline = "none";
+      renderComicGrid(shapeEl, e);
       scheduleSave();
       return;
     }
@@ -1667,6 +1742,62 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     shapeEl.addEventListener("pointercancel", up);
   }
 
+  // --- comic panel piece: a fixed set of cells, each an independent photo slot. Cells are plain,
+  // unclickable boxes (no listener of their own) so the usual drag/resize/rotate handling on the
+  // outer .el piece keeps working no matter where on it you grab -- a cell gets its photo from the
+  // selection bar's per-cell buttons instead, the same "select the piece, then use the toolbar" flow
+  // the plain photo piece already uses.
+  function renderComicGrid(shapeEl, e){
+    var rects = comicRects(e.layoutKey, !!e.flipH, !!e.flipV);
+    if(!e.cells || e.cells.length !== rects.length){
+      e.cells = rects.map(function(){ return { content:null, photoPath:null }; });
+    }
+    shapeEl.innerHTML = "";
+    rects.forEach(function(r, idx){
+      var cell = document.createElement("div");
+      cell.className = "ccCell";
+      cell.style.left = r.x+"%"; cell.style.top = r.y+"%";
+      cell.style.width = r.w+"%"; cell.style.height = r.h+"%";
+      var cellData = e.cells[idx] || {};
+      if(cellData.content){
+        var img = document.createElement("img");
+        img.crossOrigin = "anonymous";
+        img.src = corsSafeImageUrl(cellData.content);
+        cell.appendChild(img);
+      } else {
+        var add = document.createElement("span");
+        add.className = "ccAdd";
+        add.textContent = "+ photo";
+        cell.appendChild(add);
+      }
+      shapeEl.appendChild(cell);
+    });
+  }
+
+  // Same upload flow as pickPhoto(), but writes into one cell of a comic-panel piece's cells
+  // array instead of the piece's own single content field.
+  function pickPhotoForCell(id, idx){
+    var input = document.createElement("input");
+    input.type = "file"; input.accept = "image/*";
+    input.addEventListener("change", function(){
+      var file = input.files && input.files[0];
+      if(!file) return;
+      var e = byId(id);
+      if(!e || !e.cells || !e.cells[idx]) return;
+      var ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g,"") || "jpg";
+      var path = (currentPageRow ? currentPageRow.id : "misc") + "/" + uid() + "." + ext;
+      sb.storage.from("zine-images").upload(path, file, { upsert:true, contentType: file.type || "image/jpeg" }).then(function(res){
+        if(res.error){ alert("Couldn't upload the photo: " + res.error.message); return; }
+        var pub = sb.storage.from("zine-images").getPublicUrl(path);
+        e.cells[idx].content = pub.data.publicUrl;
+        e.cells[idx].photoPath = path;
+        updateDiv(e);
+        renderLayers();
+      });
+    });
+    input.click();
+  }
+
   function refreshAllFilters(){ els.forEach(updateDiv); }
 
   function reorderDom(){
@@ -1708,7 +1839,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   }
 
   function labelFor(e){
-    var typeName = { text:"Text", photo:"Photo", rect:"Bar", burst:"Burst", bubble:"Bubble", circle:"Circle", arrow:"Arrow", ticket:"Ticket", stamp:"Stamp", outline:"Note", bolt:"Bolt", tape:"Tape", crossword:"Crossword", sticker:"Sticker", qr:"QR code", doodle:"Doodle" }[e.type];
+    var typeName = { text:"Text", photo:"Photo", rect:"Bar", burst:"Burst", bubble:"Bubble", circle:"Circle", arrow:"Arrow", ticket:"Ticket", stamp:"Stamp", outline:"Note", bolt:"Bolt", tape:"Tape", crossword:"Crossword", sticker:"Sticker", qr:"QR code", doodle:"Doodle", comicgrid:"Comic panels" }[e.type];
     var detail;
     if(e.type==="photo"){ detail = e.content?"has image":"empty"; }
     else if(e.type==="crossword"){ detail = (e.cwData && e.cwData.placements && e.cwData.placements.length) ? (e.cwData.placements.length+" words") : "empty"; }
@@ -1761,7 +1892,8 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     var isSticker = e.type === "sticker";
     var isQr = e.type === "qr";
     var isDoodle = e.type === "doodle";
-    var isText = e.type !== "photo" && !isCrossword && !isSticker && !isQr && !isDoodle;
+    var isComicGrid = e.type === "comicgrid";
+    var isText = e.type !== "photo" && !isCrossword && !isSticker && !isQr && !isDoodle && !isComicGrid;
 
     if(isCrossword){
       var editCwBtn = document.createElement("button");
@@ -1788,6 +1920,21 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
         renderSelbar();
       });
       selbar.appendChild(drawBtn);
+    } else if(isComicGrid){
+      var changeLayoutBtn = document.createElement("button");
+      changeLayoutBtn.textContent = "Change layout";
+      changeLayoutBtn.addEventListener("click", function(){ openComicPanel(e); });
+      selbar.appendChild(changeLayoutBtn);
+
+      var flipHBtn = document.createElement("button");
+      flipHBtn.textContent = "Flip ↔";
+      flipHBtn.addEventListener("click", function(){ snapshotUndo(); e.flipH = !e.flipH; updateDiv(e); });
+      selbar.appendChild(flipHBtn);
+
+      var flipVBtn = document.createElement("button");
+      flipVBtn.textContent = "Flip ↕";
+      flipVBtn.addEventListener("click", function(){ snapshotUndo(); e.flipV = !e.flipV; updateDiv(e); });
+      selbar.appendChild(flipVBtn);
     } else if(isText){
       var editBtn = document.createElement("button");
       editBtn.textContent = "Edit text";
@@ -1907,6 +2054,15 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
         renderSelbar();
       });
       selrow.appendChild(clearDoodleBtn);
+    }
+
+    if(isComicGrid){
+      (e.cells||[]).forEach(function(cellData, idx){
+        var cellBtn = document.createElement("button");
+        cellBtn.textContent = (cellData && cellData.content ? "Replace " : "Add ") + "photo " + (idx+1);
+        cellBtn.addEventListener("click", function(){ pickPhotoForCell(e.id, idx); });
+        selrow.appendChild(cellBtn);
+      });
     }
 
     if(isText){
@@ -2293,6 +2449,53 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     openPanel(stickerPanel);
   }
 
+  // --- comic panel layout picker ---------------------------------------------------------------
+  var comicEditingId = null; // id of the comic-panel piece being swapped to a different layout, or null when adding a new one
+  var comicGridEl = document.getElementById("comicGrid");
+  (function buildComicGrid(){
+    Object.keys(COMIC_LAYOUTS).forEach(function(key){
+      var def = COMIC_LAYOUTS[key];
+      var btn = document.createElement("button");
+      btn.type = "button";
+      var preview = document.createElement("span");
+      preview.className = "ccPreview";
+      comicRects(key, false, false).forEach(function(r){
+        var cellSpan = document.createElement("span");
+        cellSpan.style.left = r.x+"%"; cellSpan.style.top = r.y+"%";
+        cellSpan.style.width = r.w+"%"; cellSpan.style.height = r.h+"%";
+        preview.appendChild(cellSpan);
+      });
+      var labelSpan = document.createElement("span");
+      labelSpan.textContent = def.label + (def.half ? " (half)" : "");
+      btn.appendChild(preview); btn.appendChild(labelSpan);
+      btn.addEventListener("click", function(){
+        var cellCount = def.rects.length;
+        var newCells = []; for(var i=0;i<cellCount;i++){ newCells.push({ content:null, photoPath:null }); }
+        var editing = comicEditingId && byId(comicEditingId);
+        if(editing){
+          snapshotUndo();
+          editing.layoutKey = key;
+          editing.flipH = false; editing.flipV = false;
+          editing.cells = newCells;
+          updateDiv(editing);
+          renderLayers();
+          renderSelbar();
+          scheduleSave();
+        } else {
+          addEl("comicgrid", Object.assign({}, COMIC_ADD_DEFAULTS[key], {
+            layoutKey: key, flipH:false, flipV:false, cells: newCells
+          }));
+        }
+        closeDrawer();
+      });
+      comicGridEl.appendChild(btn);
+    });
+  })();
+  function openComicPanel(existing){
+    comicEditingId = existing ? existing.id : null;
+    openPanel(comicPanel);
+  }
+
   // --- QR code ------------------------------------------------------------------------------
   var qrEditingId = null; // id of the QR piece being re-linked, or null when adding a new one
   var qrInput = document.getElementById("qrInput");
@@ -2378,7 +2581,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     gesture = null;
     var e = byId(id);
     // these types have their own dedicated edit flow (panel/picker), not free-text contenteditable
-    if(!e || e.type === "photo" || e.type === "crossword" || e.type === "sticker" || e.type === "qr" || e.type === "doodle") return;
+    if(!e || e.type === "photo" || e.type === "crossword" || e.type === "sticker" || e.type === "qr" || e.type === "doodle" || e.type === "comicgrid") return;
     if(g && g.id===id && !g.moved && g.wasSelected){
       snapshotUndo();
       enterEdit(id);
