@@ -548,19 +548,17 @@ async function subscribe(form){
 
 /* ---------- enquiry forms (play a show / book a band) and Tacos & Flipflops ---------- */
 const TF_SITE='https://tacosandflipflops-23457721184.mywebsite.im/';
-let BOOK_BANDS=[], FORM_T0=0;
+let BOOK_BANDS=[];
 const NOTSURE='Not sure yet, suggest someone';
 function fld(id,label,o){o=o||{};
   const req=o.req?' <span style="color:var(--red)" aria-hidden="true">*</span>':'';
   const attrs=`id="${id}" name="${id}"${o.req?' required aria-required="true"':''}${o.auto?` autocomplete="${o.auto}"`:''}${o.ph?` placeholder="${esc(o.ph)}"`:''}${o.max?` maxlength="${o.max}"`:''}`;
   const inp=o.area?`<textarea ${attrs}${o.rows?` style="min-height:${o.rows*30+30}px"`:''}></textarea>`:`<input ${attrs} type="${o.type||'text'}"${o.min?` min="${o.min}"`:''}${o.mode?` inputmode="${o.mode}"`:''}>`;
   return `<div class="field"><label for="${id}">${label}${req}</label>${inp}${o.hint?`<span class="mono" style="color:var(--muted);font-size:12px;text-transform:none">${o.hint}</span>`:''}</div>`}
-const hpField='<div class="hp" aria-hidden="true"><label>Leave this empty<input type="text" id="f-web" tabindex="-1" autocomplete="off"></label></div>';
 const fixLink=v=>{v=(v||'').trim();return v&&!/^[a-z][a-z0-9+.-]*:/i.test(v)&&/^[^\s@]+\.[^\s@]{2,}/.test(v)?'https://'+v:v};
 const nul2=v=>{v=(v||'').trim();return v||null};
 const sideCard=(k,t,body)=>`<aside class="card" style="padding:28px 26px"><div class="tape"></div><p class="mono" style="color:var(--red);margin-bottom:10px">${k}</p><h3 class="disp" style="font-size:30px;margin-bottom:10px">${t}</h3>${body}</aside>`;
 function playPage(){
-  FORM_T0=Date.now();
   return head('For bands','Wanna play a show?',"We put on gigs across Peterborough and King's Lynn and we're always after new bands. Tell us who you are and send us some music.")+`
 <section style="padding:72px 0 96px"><div class="wrap"><div class="split rev">
 <form class="card" id="play-form" novalidate style="padding:36px 32px"><div class="tape"></div>
@@ -572,16 +570,15 @@ ${fld('f-city','City or town',{req:1,max:150})}
 ${fld('f-socials','Socials',{area:1,rows:2,ph:'Instagram, Facebook, website… paste your links',max:1000})}
 ${fld('f-msg','Say hi',{area:1,rows:4,hint:'Tell us about the band, what you are after, anything at all.',max:4000})}
 ${fld('f-recs','Recommend us a few bands',{area:1,rows:3,hint:'Who are you listening to at the moment? Who should we be putting on?',max:2000})}
-${hpField}
 <button class="btn red" type="submit">Send it</button>
-<p id="f-note" class="mono" role="status" hidden style="margin-top:18px"></p>
-<p class="mono" style="margin-top:16px;color:var(--muted);font-size:12px;text-transform:none">We only use these details to get back to you about gigs. We never share them. Fields marked * are needed.</p>
+<p id="f-note" class="mono" role="status" hidden style="margin-top:18px;text-transform:none;font-size:14px;line-height:1.5"></p>
+<p class="mono" style="margin-top:16px;color:var(--muted);font-size:12px;text-transform:none">Pressing send opens an email to us with everything filled in. Nothing is stored on this website. Fields marked * are needed.</p>
 </form>
 <div>${sideCard('How it works','No fuss',`<p style="margin-bottom:12px">We're a few mates doing this for the love of it, so give us a little time to reply. We read everything.</p><p style="margin-bottom:12px">DIY, non-profit and friendly. Bands from anywhere are welcome, the more different the better.</p><p>Prefer email? <a href="mailto:socksonrecords@gmail.com">socksonrecords@gmail.com</a></p>`)}</div>
 </div></div></section>`;
 }
 function bookPage(pre){
-  FORM_T0=Date.now();BOOK_BANDS=[];
+  BOOK_BANDS=[];
   const sorted=BANDS.slice().sort((a,b)=>a.name.localeCompare(b.name));
   if(pre){const b=BANDS.find(x=>x.slug===pre);if(b)BOOK_BANDS.push(b.name)}
   const today=new Date();const min=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
@@ -599,10 +596,9 @@ ${fld('f-venue','Venue and city',{req:1,max:300})}
 ${fld('f-details','Details',{area:1,rows:5,hint:'Capacity, set times, fee or door split, travel, anything else we should know.',max:4000})}
 ${fld('f-socials','Links to your socials',{area:1,rows:2,ph:'Your venue, night or promoter page',max:1000})}
 ${fld('f-others','Other bands on the bill',{area:1,rows:2,hint:'Leave blank if you like, but we are nosy and would love to know.',max:2000})}
-${hpField}
 <button class="btn red" type="submit">Send it</button>
-<p id="f-note" class="mono" role="status" hidden style="margin-top:18px"></p>
-<p class="mono" style="margin-top:16px;color:var(--muted);font-size:12px;text-transform:none">We only use these details to get back to you about the booking. We never share them. Fields marked * are needed.</p>
+<p id="f-note" class="mono" role="status" hidden style="margin-top:18px;text-transform:none;font-size:14px;line-height:1.5"></p>
+<p class="mono" style="margin-top:16px;color:var(--muted);font-size:12px;text-transform:none">Pressing send opens an email to us with everything filled in. Nothing is stored on this website. Fields marked * are needed.</p>
 </form>
 <div>${sideCard('How it works','Over to the bands',`<p style="margin-bottom:12px">We pass your message to the band(s) and come back to you. Everyone here is doing this around jobs and lives, so give us a few days.</p><p style="margin-bottom:12px">Not sure who fits? Choose "${NOTSURE}" and tell us about the night.</p><p>Prefer email? <a href="mailto:socksonrecords@gmail.com">socksonrecords@gmail.com</a></p>`)}</div>
 </div></div></section>`;
@@ -616,36 +612,39 @@ function addPick(){
   if(!BOOK_BANDS.includes(s.value))BOOK_BANDS.push(s.value);
   s.value='';renderChips();return true;
 }
-async function sendEnquiry(form,table,row){
-  const note=document.getElementById('f-note'),btn=form.querySelector('button[type=submit]');
-  const say=(t,bad)=>{note.hidden=false;note.textContent=t;note.style.color=bad?'var(--red)':'var(--ink)'};
-  const thanks=()=>{form.innerHTML=`<div class="tape"></div><h2 class="disp" style="font-size:40px;margin-bottom:12px">Got it, thanks!</h2><p style="margin-bottom:8px">${table==='play_requests'?"We'll have a listen and get back to you.":"We'll pass it on and get back to you."}</p><p>Anything urgent? <a href="mailto:socksonrecords@gmail.com">socksonrecords@gmail.com</a></p>`;window.scrollTo(0,0)};
-  if(document.getElementById('f-web').value||Date.now()-FORM_T0<2500){thanks();return}   // bots: pretend it worked
-  btn.disabled=true;
-  try{
-    const r=await fetch(SUPABASE_URL+'/rest/v1/'+table,{method:'POST',headers:{apikey:SUPABASE_KEY,'Content-Type':'application/json',Prefer:'return=minimal'},body:JSON.stringify(row)});
-    if(r.ok)thanks();else say('Something went wrong sending that. Please try again, or email socksonrecords@gmail.com.',true);
-  }catch(e){say('Something went wrong sending that. Please try again, or email socksonrecords@gmail.com.',true)}
-  btn.disabled=false;
+const MAILTO_TO='socksonrecords@gmail.com';
+function mailUrl(subject,lines){
+  const text='Hi Socks On Records,\n\n'+lines.filter(x=>x[1]).map(x=>x[0]+': '+x[1]).join('\n\n')+'\n';
+  return {text,url:'mailto:'+MAILTO_TO+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(text)};
+}
+function openMail(form,subject,lines){
+  const note=document.getElementById('f-note');
+  const m=mailUrl(subject,lines),text=m.text;
+  location.href=m.url;
+  note.hidden=false;note.style.color='var(--ink)';
+  note.innerHTML='Your email app should have opened with everything filled in. Press send in there and you are done. If nothing opened, <button type="button" class="btn small" id="f-copy" style="margin:6px 0">Copy the message</button> and email it to <a href="mailto:'+MAILTO_TO+'">'+MAILTO_TO+'</a>.';
+  document.getElementById('f-copy').addEventListener('click',e=>{const b=e.target;const done=()=>{b.textContent='Copied'};
+    if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(text).then(done).catch(()=>prompt('Copy this message:',text));else prompt('Copy this message:',text)});
 }
 function checkFields(form,ids){
   const note=document.getElementById('f-note');
   for(const [id,label] of ids){const el=document.getElementById(id);if(!el.value.trim()){note.hidden=false;note.style.color='var(--red)';note.textContent='Please fill in: '+label+'.';el.focus();return false}}
   return true;
 }
+const prettyDate=d=>{if(!d)return '';const x=new Date(d+'T12:00:00');return isNaN(x)?d:x.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})};
 function submitPlay(form){
   if(!checkFields(form,[['f-band','Band'],['f-name','Your name'],['f-email','Email'],['f-music','Link to your music'],['f-city','City or town']]))return;
-  const v=id=>document.getElementById(id).value;
-  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v('f-email').trim())){const n=document.getElementById('f-note');n.hidden=false;n.style.color='var(--red)';n.textContent='That email address does not look right.';document.getElementById('f-email').focus();return}
-  sendEnquiry(form,'play_requests',{band_name:v('f-band').trim(),contact_name:v('f-name').trim(),email:v('f-email').trim(),music_link:fixLink(v('f-music')),city:v('f-city').trim(),socials:nul2(v('f-socials')),message:nul2(v('f-msg')),recommendations:nul2(v('f-recs'))});
+  const v=id=>document.getElementById(id).value.trim();
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v('f-email'))){const n=document.getElementById('f-note');n.hidden=false;n.style.color='var(--red)';n.textContent='That email address does not look right.';document.getElementById('f-email').focus();return}
+  openMail(form,'Wanna play a show: '+v('f-band'),[['Band',v('f-band')],['Name',v('f-name')],['Email',v('f-email')],['Music',fixLink(v('f-music'))],['City / town',v('f-city')],['Socials',v('f-socials')],['Say hi',v('f-msg')],['Bands we should check out',v('f-recs')]]);
 }
 function submitBook(form){
   addPick();
   if(!checkFields(form,[['f-who','Who are you?'],['f-contact','Contact']]))return;
   if(!BOOK_BANDS.length){const n=document.getElementById('f-note');n.hidden=false;n.style.color='var(--red)';n.textContent='Please choose at least one band and press Add.';document.getElementById('f-pick').focus();return}
   if(!checkFields(form,[['f-venue','Venue and city']]))return;
-  const v=id=>document.getElementById(id).value;
-  sendEnquiry(form,'booking_requests',{who:v('f-who').trim(),contact:v('f-contact').trim(),bands:BOOK_BANDS.slice(),event_date:nul2(v('f-date')),venue:v('f-venue').trim(),details:nul2(v('f-details')),socials:nul2(v('f-socials')),other_bands:nul2(v('f-others'))});
+  const v=id=>document.getElementById(id).value.trim();
+  openMail(form,'Book a band: '+BOOK_BANDS.join(', '),[['From',v('f-who')],['Contact',v('f-contact')],['Band(s) wanted',BOOK_BANDS.join(', ')],['Date',prettyDate(v('f-date'))],['Venue / city',v('f-venue')],['Details',v('f-details')],['Their socials',v('f-socials')],['Other bands on the bill',v('f-others')]]);
 }
 function tacosPage(){
   const tile=(k,t,b)=>`<article class="card" style="padding:32px 28px"><div class="tape"></div><p class="mono" style="color:var(--red);margin-bottom:10px">${k}</p><h3 class="disp" style="font-size:32px;margin-bottom:10px">${t}</h3><p>${b}</p></article>`;

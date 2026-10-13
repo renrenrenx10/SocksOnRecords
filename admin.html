@@ -120,8 +120,6 @@ async function load(){
     S.videos=await tryLoad(db.from('videos').select('*,bands(name)').order('sort_order').order('created_at',{ascending:false}));
     S.sessions=await tryLoad(db.from('sessions').select('*,bands(name)').order('session_date',{ascending:false,nullsFirst:false}));
     S.shop=await tryLoad(db.from('shop_items').select('*').order('kind').order('sort_order').order('created_at'));
-    S.plays=await tryLoad(db.from('play_requests').select('*').order('created_at',{ascending:false}));
-    S.bookings=await tryLoad(db.from('booking_requests').select('*').order('created_at',{ascending:false}));
     S.subs=await tryLoad(db.from('subscribers').select('*').order('created_at',{ascending:false}));
     const st=await db.from('site_settings').select('*').eq('key','featured_release').maybeSingle();
     S.settings=st.error?null:(st.data||{value:{}});   // null = the 03 SQL hasn't been run yet
@@ -147,7 +145,7 @@ function render(){
   if(!S.ready){app.innerHTML='<p class="mono">Loading…</p>';return}
   if(!S.profile){app.innerHTML=`<div class="card"><h2 class="disp" style="margin-bottom:10px">Something's off</h2><p>You're signed in, but there's no profile for you yet. Ask Roy to check your invite.</p></div>`;return}
   if(!S.admin&&!S.mine.length){app.innerHTML=`<div class="card"><h2 class="disp" style="margin-bottom:10px">You're in</h2><p>You're signed in, but you're not linked to a band yet. Ask Roy to link your login to your band and you'll be able to edit it here.</p></div>${accountView()}`;return}
-  const tabs=S.admin?[['bands','Bands'],['gigs','Gigs'],['releases','Releases'],['featured','Featured'],['videos','Videos'],['sessions','Sessions'],['shop','Shop'],['enq','Enquiries'+enqBadge()],['subs','Newsletter'],['traffic','Traffic'],['people','Users'],['account','Account']]:[['bands',S.mine.length>1?'My bands':'My band'],['gigs','Gigs'],['releases','Releases'],['account','Account']];
+  const tabs=S.admin?[['bands','Bands'],['gigs','Gigs'],['releases','Releases'],['featured','Featured'],['videos','Videos'],['sessions','Sessions'],['shop','Shop'],['subs','Newsletter'],['traffic','Traffic'],['people','Users'],['account','Account']]:[['bands',S.mine.length>1?'My bands':'My band'],['gigs','Gigs'],['releases','Releases'],['account','Account']];
   if(!tabs.some(t=>t[0]===S.tab))S.tab='bands';
   const tb=`<div class="tabs" role="tablist">${tabs.map(t=>`<button role="tab" class="${S.tab===t[0]?'on':''}" data-act="tab" data-tab="${t[0]}">${t[1]}</button>`).join('')}</div>`;
   let body='';
@@ -158,7 +156,6 @@ function render(){
   else if(S.tab==='videos')body=S.edit?videoForm():videosView();
   else if(S.tab==='sessions')body=S.edit?sessionForm():sessionsView();
   else if(S.tab==='shop')body=S.edit?shopForm():shopView();
-  else if(S.tab==='enq')body=enqView();
   else if(S.tab==='subs')body=subsView();
   else if(S.tab==='traffic')body=trafficView();
   else if(S.tab==='people')body=peopleView();
@@ -480,38 +477,6 @@ function subsView(){
   ${n?S.subs.map(s=>`<div class="row"><div><div class="t" style="text-transform:none;font-family:'Archivo',sans-serif;font-weight:700;font-size:17px">${esc(s.email)}</div><div class="s">${esc((s.created_at||'').slice(0,10))}</div></div><div class="a"><button class="btn sm" data-act="delSub" data-id="${s.id}" data-name="${esc(s.email)}">Remove</button></div></div>`).join(''):'<p>Nobody yet.</p>'}`;
 }
 
-/* ----- enquiries (admin): "wanna play a show" and "book a band" forms ----- */
-const linkify=s=>esc(s).replace(/(https?:\/\/[^\s<]+)/g,u=>`<a href="${u}" target="_blank" rel="noopener">${u}</a>`);
-const newEnq=()=>(S.plays||[]).filter(x=>x.status==='new').length+(S.bookings||[]).filter(x=>x.status==='new').length;
-const enqBadge=()=>{const n=newEnq();return n?' ('+n+')':''};
-const isEmail=v=>/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(v||'').trim());
-function enqCard(kind,r){
-  const rows=kind==='play'
-    ?[['Band',r.band_name],['Name',r.contact_name],['Email',r.email],['Music',r.music_link],['City / town',r.city],['Socials',r.socials],['Message',r.message],['Recommends',r.recommendations]]
-    :[['From',r.who],['Contact',r.contact],['Wants',(r.bands||[]).join(', ')],['Date',r.event_date?new Date(r.event_date+'T12:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'long',year:'numeric'}):''],['Venue / city',r.venue],['Details',r.details],['Their socials',r.socials],['Other bands on the bill',r.other_bands]];
-  const to=kind==='play'?r.email:(isEmail(r.contact)?r.contact.trim():'');
-  const subj=kind==='play'?'Playing a show with Socks On Records':'Booking a Socks On Records band';
-  const st={new:'<span class="tag bad">New</span>',replied:'<span class="tag">Replied</span>',archived:'<span class="tag" style="background:var(--paper)">Archived</span>'}[r.status]||'';
-  const b=(s,l)=>`<button class="btn sm" data-act="enqStatus" data-k="${kind}" data-id="${r.id}" data-s="${s}">${l}</button>`;
-  return `<div class="card" style="margin-bottom:18px;padding:18px 20px">
-  <div class="bar" style="margin-bottom:10px"><div><span class="t" style="font-family:'Anton',Impact,sans-serif;text-transform:uppercase;font-size:22px">${esc(kind==='play'?r.band_name:r.who)}</span>${st}<div class="s" style="color:var(--mute);font-size:14px">${esc(fmtDT(r.created_at))} · ${esc(ago(r.created_at)||'')}</div></div>
-  <div class="a" style="display:flex;gap:8px;flex-wrap:wrap">${to?`<a class="btn sm red" href="mailto:${esc(to)}?subject=${encodeURIComponent('Re: '+subj)}">Reply by email</a>`:''}${r.status==='new'?b('replied','Mark replied'):''}${r.status==='replied'?b('new','Mark new'):''}${r.status==='archived'?b('new','Restore'):b('archived','Archive')}<button class="btn sm" data-act="enqDel" data-k="${kind}" data-id="${r.id}" data-name="${esc(kind==='play'?r.band_name:r.who)}">Delete</button></div></div>
-  ${rows.filter(x=>x[1]).map(x=>`<div style="margin:4px 0;word-break:break-word"><span class="mono" style="font-size:12px;color:var(--mute)">${esc(x[0])}</span><br>${linkify(x[1]).replace(/\n/g,'<br>')}</div>`).join('')}
-  </div>`;
-}
-function enqView(){
-  if(!S.plays&&!S.bookings)return `<div class="bar"><h2 class="disp">Enquiries</h2></div>`+setupNote('13-enquiries.sql');
-  const all=S.enqAll,keep=r=>all||r.status!=='archived';
-  const pl=(S.plays||[]).filter(keep),bk=(S.bookings||[]).filter(keep);
-  const arch=(S.plays||[]).concat(S.bookings||[]).filter(r=>r.status==='archived').length;
-  return `<div class="bar"><h2 class="disp">Enquiries</h2>${arch||all?`<button class="btn sm" data-act="enqAll">${all?'Hide archived':'Show archived ('+arch+')'}</button>`:''}</div>
-  <p class="note">Messages from the <strong>Play a show</strong> and <strong>Book a band</strong> forms on the website land here. Nothing is emailed to you, so check this tab. The number on the tab is how many are new. Press <strong>Reply by email</strong> to answer from your own email.</p>
-  <h3 class="disp" style="font-size:28px;margin:6px 0 14px">Bands who want to play (${pl.length})</h3>
-  ${S.plays?(pl.length?pl.map(r=>enqCard('play',r)).join(''):'<p style="margin-bottom:26px">Nothing here yet.</p>'):'<p>Not set up yet.</p>'}
-  <h3 class="disp" style="font-size:28px;margin:26px 0 14px">Booking requests (${bk.length})</h3>
-  ${S.bookings?(bk.length?bk.map(r=>enqCard('book',r)).join(''):'<p>Nothing here yet.</p>'):'<p>Not set up yet.</p>'}`;
-}
-
 /* ----- traffic (admin) ----- */
 async function loadTraffic(){
   S.traffic=undefined;render();
@@ -680,9 +645,6 @@ document.addEventListener('click',e=>{
     else if(a==='delSession'){if(confirm('Delete this session?')){ck(await db.from('sessions').delete().eq('id',id));S.edit=null;await reload();toast('Session deleted')}}
     else if(a==='delShop'){if(confirm('Delete this item?')){ck(await db.from('shop_items').delete().eq('id',id));S.edit=null;await reload();toast('Item deleted')}}
     else if(a==='stock'){const it=S.shop.find(x=>x.id===id),n=Math.max(0,it.stock+parseInt(t.dataset.d,10));ck(await db.from('shop_items').update({stock:n}).eq('id',id));it.stock=n;render();toast(it.title+': '+n+' in stock')}
-    else if(a==='enqAll'){S.enqAll=!S.enqAll;render()}
-    else if(a==='enqStatus'){const tb=t.dataset.k==='play'?'play_requests':'booking_requests',list=t.dataset.k==='play'?S.plays:S.bookings,it=list.find(x=>x.id===id);ck(await db.from(tb).update({status:t.dataset.s}).eq('id',id));it.status=t.dataset.s;render();toast({replied:'Marked as replied',archived:'Archived',new:'Marked as new'}[t.dataset.s])}
-    else if(a==='enqDel'){if(confirm('Delete the enquiry from '+t.dataset.name+' for good?')){const tb=t.dataset.k==='play'?'play_requests':'booking_requests';ck(await db.from(tb).delete().eq('id',id));await reload();toast('Deleted')}}
     else if(a==='delSub'){if(confirm('Remove '+t.dataset.name+' from the list?')){ck(await db.from('subscribers').delete().eq('id',id));await reload();toast('Removed')}}
     else if(a==='copySubs'){const txt=S.subs.map(s=>s.email).join(', ');try{await navigator.clipboard.writeText(txt);toast(S.subs.length+' emails copied')}catch(x){prompt('Copy these emails:',txt)}}
     else if(a==='csvSubs'){const csv='email,signed_up\n'+S.subs.map(s=>'"'+String(s.email).replace(/"/g,'""')+'",'+(s.created_at||'').slice(0,10)).join('\n');const u=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));const l=document.createElement('a');l.href=u;l.download='socks-on-subscribers.csv';document.body.appendChild(l);l.click();l.remove();setTimeout(()=>URL.revokeObjectURL(u),1000)}
