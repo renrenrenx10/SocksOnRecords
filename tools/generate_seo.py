@@ -116,6 +116,7 @@ def page(path, title, desc, body, image=None, jsonld=None, og_type="website", sp
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/seo.css">
 {ld(jsonld) if jsonld else ""}
+<script src="/track.js" defer></script>
 </head>
 <body>
 <header class="top"><div class="w"><a class="logo" href="/"><img src="/logo.png" alt="{NAME}" width="130" height="65"></a><nav aria-label="Main">{nav}</nav></div></header>

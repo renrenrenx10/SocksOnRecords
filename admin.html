@@ -55,6 +55,23 @@ input:focus,select:focus,textarea:focus,button:focus-visible{outline:3px solid v
 #toast.bad{background:var(--red)}
 h2.disp{font-size:34px}
 .center{max-width:460px;margin:60px auto}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:26px}
+.tile{background:var(--card);border:2px solid var(--ink);box-shadow:4px 4px 0 var(--ink);padding:14px 16px}
+.tile .n{font-family:'Anton',Impact,sans-serif;font-size:44px;line-height:1.05}
+.tile .l{font-family:'Space Mono',monospace;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+.tile .c{font-size:14px;color:var(--mute);margin-top:2px}
+.chart{display:flex;align-items:flex-end;gap:3px;height:170px;border-bottom:3px solid var(--ink);padding:0 2px}
+.chart .col{flex:1;min-width:0;height:100%;display:flex;align-items:flex-end;position:relative}
+.chart .v{width:100%;background:var(--sky);border:2px solid var(--ink);border-bottom:0;position:relative;min-height:0}
+.chart .u{position:absolute;left:0;right:0;bottom:0;background:var(--ink)}
+.chart .col:hover{background:rgba(22,19,15,.08)}
+.axis{display:flex;justify-content:space-between;font-family:'Space Mono',monospace;font-size:12px;margin:6px 2px 24px}
+.lg{display:inline-block;width:14px;height:14px;border:2px solid var(--ink);vertical-align:-2px;margin:0 4px 0 12px}
+.trow{display:grid;grid-template-columns:1fr auto;gap:4px 14px;padding:10px 0;border-bottom:2px solid var(--ink)}
+.trow:first-child{border-top:2px solid var(--ink)}
+.trow .m{grid-column:1/-1;height:8px;background:var(--paper);border:1px solid var(--ink)}
+.trow .m i{display:block;height:100%;background:var(--red)}
+.trow b{font-family:'Anton',Impact,sans-serif;font-size:20px;font-weight:400}
 @media (max-width:640px){.g2{grid-template-columns:1fr}.row .t{font-size:20px}}
 </style>
 </head>
@@ -128,7 +145,7 @@ function render(){
   if(!S.ready){app.innerHTML='<p class="mono">Loading…</p>';return}
   if(!S.profile){app.innerHTML=`<div class="card"><h2 class="disp" style="margin-bottom:10px">Something's off</h2><p>You're signed in, but there's no profile for you yet. Ask Roy to check your invite.</p></div>`;return}
   if(!S.admin&&!S.mine.length){app.innerHTML=`<div class="card"><h2 class="disp" style="margin-bottom:10px">You're in</h2><p>You're signed in, but you're not linked to a band yet. Ask Roy to link your login to your band and you'll be able to edit it here.</p></div>${accountView()}`;return}
-  const tabs=S.admin?[['bands','Bands'],['gigs','Gigs'],['releases','Releases'],['featured','Featured'],['videos','Videos'],['sessions','Sessions'],['shop','Shop'],['subs','Newsletter'],['people','Users'],['account','Account']]:[['bands',S.mine.length>1?'My bands':'My band'],['gigs','Gigs'],['releases','Releases'],['account','Account']];
+  const tabs=S.admin?[['bands','Bands'],['gigs','Gigs'],['releases','Releases'],['featured','Featured'],['videos','Videos'],['sessions','Sessions'],['shop','Shop'],['subs','Newsletter'],['traffic','Traffic'],['people','Users'],['account','Account']]:[['bands',S.mine.length>1?'My bands':'My band'],['gigs','Gigs'],['releases','Releases'],['account','Account']];
   if(!tabs.some(t=>t[0]===S.tab))S.tab='bands';
   const tb=`<div class="tabs" role="tablist">${tabs.map(t=>`<button role="tab" class="${S.tab===t[0]?'on':''}" data-act="tab" data-tab="${t[0]}">${t[1]}</button>`).join('')}</div>`;
   let body='';
@@ -140,6 +157,7 @@ function render(){
   else if(S.tab==='sessions')body=S.edit?sessionForm():sessionsView();
   else if(S.tab==='shop')body=S.edit?shopForm():shopView();
   else if(S.tab==='subs')body=subsView();
+  else if(S.tab==='traffic')body=trafficView();
   else if(S.tab==='people')body=peopleView();
   else if(S.tab==='account')body=accountView();
   const vk=S.tab+'|'+(S.edit&&typeof S.edit==='object'?JSON.stringify(S.edit):String(S.edit)),y=window.scrollY,same=vk===S.vk;
@@ -397,7 +415,7 @@ async function saveFeatured(form){
 
 
 /* ----- videos (admin) ----- */
-const setupNote=()=>`<div class="note"><strong>One setup step first.</strong> Run <code>07-videos-sessions-newsletter.sql</code> (in the supabase folder) in the Supabase SQL Editor, then reload this page.</div>`;
+const setupNote=(f='07-videos-sessions-newsletter.sql')=>`<div class="note"><strong>One setup step first.</strong> Run <code>${f}</code> (in the supabase folder) in the Supabase SQL Editor, then reload this page.</div>`;
 const bandSelect=(sel,name)=>`<div class="f"><label for="${name}">Band (optional)</label><select id="${name}" name="${name}"><option value="">None / guest</option>${S.bands.slice().sort((x,y)=>x.name.localeCompare(y.name)).map(b=>`<option value="${b.id}"${b.id===sel?' selected':''}>${esc(b.name)}</option>`).join('')}</select></div>`;
 function videosView(){
   if(!S.videos)return `<div class="bar"><h2 class="disp">Videos</h2></div>`+setupNote();
@@ -457,6 +475,53 @@ function subsView(){
   return `<div class="bar"><h2 class="disp">Newsletter</h2><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn sm" data-act="copySubs">Copy all emails</button><button class="btn sm" data-act="csvSubs">Download CSV</button></div></div>
   <p class="note"><strong>${n} ${n===1?'person':'people'} signed up.</strong> To send a newsletter, copy the emails and paste them into the Bcc box of an email (so nobody sees anyone else's address), or import the CSV into Mailchimp, Buttondown or similar. Remove anyone who asks to unsubscribe.</p>
   ${n?S.subs.map(s=>`<div class="row"><div><div class="t" style="text-transform:none;font-family:'Archivo',sans-serif;font-weight:700;font-size:17px">${esc(s.email)}</div><div class="s">${esc((s.created_at||'').slice(0,10))}</div></div><div class="a"><button class="btn sm" data-act="delSub" data-id="${s.id}" data-name="${esc(s.email)}">Remove</button></div></div>`).join(''):'<p>Nobody yet.</p>'}`;
+}
+
+/* ----- traffic (admin) ----- */
+async function loadTraffic(){
+  S.traffic=undefined;render();
+  const r=await db.rpc('admin_traffic',{p_days:S.tdays||30});
+  S.traffic=r.error?{error:r.error.message||String(r.error)}:r.data;
+  if(S.tab==='traffic')render();
+}
+function pageName(p){
+  const fixed={'/':'Home','/roster/':'Roster','/gigs/':'Gigs','/releases/':'Releases','/videos/':'Videos','/sessions/':'Socks On Sessions','/shop/':'Merch & Tickets','/contact/':'Contact'};
+  if(fixed[p])return fixed[p];
+  const m=p.match(/^\/band\/([^/]+)\/$/);
+  if(m){const b=S.bands.find(x=>x.slug===m[1]);return 'Band: '+(b?b.name:m[1])}
+  return p;
+}
+function dayLabel(d){const x=new Date(d+'T12:00:00');return x.toLocaleDateString('en-GB',{day:'numeric',month:'short'})}
+function change(now,prev){if(!prev)return 'nothing to compare yet';const p=Math.round((now-prev)/prev*100);return (p>0?'+':'')+p+'% vs the '+'previous period'}
+function trafficView(){
+  const T=S.traffic,days=S.tdays||30;
+  const head=`<div class="bar"><h2 class="disp">Traffic</h2><div style="display:flex;gap:8px;flex-wrap:wrap">${[7,30,90].map(n=>`<button class="btn sm ${n===days?'red':''}" data-act="tdays" data-days="${n}">${n} days</button>`).join('')}</div></div>`;
+  if(T===undefined)return head+'<p class="mono">Loading…</p>';
+  if(T===null||!T)return head+'<p>No data.</p>';
+  if(T.error){
+    if(/admin_traffic|schema cache|Could not find/i.test(T.error))return head+setupNote('12-traffic.sql');
+    return head+`<p class="note"><strong>Could not load traffic.</strong> ${esc(T.error)}</p>`;
+  }
+  let off=false;try{off=!!localStorage.getItem('sor_no_track')}catch(x){}
+  const max=Math.max(1,...T.daily.map(x=>x.views));
+  const chart=`<div class="chart" role="img" aria-label="Daily visitors and page views">${T.daily.map(x=>`<div class="col" title="${dayLabel(x.d)}: ${x.visitors} visitor${x.visitors===1?'':'s'}, ${x.views} page view${x.views===1?'':'s'}"><div class="v" style="height:${x.views?Math.max(3,x.views/max*100):0}%"><div class="u" style="height:${x.views?x.visitors/x.views*100:0}%"></div></div></div>`).join('')}</div>
+  <div class="axis"><span>${dayLabel(T.daily[0].d)}</span><span><i class="lg" style="background:var(--ink)"></i>Visitors<i class="lg" style="background:var(--sky)"></i>Page views</span><span>${dayLabel(T.daily[T.daily.length-1].d)}</span></div>`;
+  const list=(rows,label,val,sub)=>{const m=Math.max(1,...rows.map(val));return rows.length?rows.map(r=>`<div class="trow"><span>${esc(label(r))}</span><b>${val(r)}</b>${sub?`<span class="s" style="grid-column:1/-1;color:var(--mute);font-size:14px;margin-top:-4px">${esc(sub(r))}</span>`:''}<div class="m"><i style="width:${val(r)/m*100}%"></i></div></div>`).join(''):'<p>Nothing yet.</p>'};
+  const direct=Math.max(0,T.visitors-T.from_ref);
+  const refs=T.refs.slice();if(direct)refs.push({ref:'Direct or unknown (typed in, bookmarks, apps)',visitors:direct});refs.sort((x,y)=>y.visitors-x.visitors);
+  return head+`
+  <p class="note"><strong>Counts visits to the public site only.</strong> No cookies, no IP addresses and no personal details are stored. A "visitor" is one browser visit (a returning person on another day counts again), so read these as a guide rather than exact figures. People using Do Not Track or ad blockers are not counted, and neither are search engine bots.</p>
+  <div class="tiles">
+    <div class="tile"><div class="n">${T.visitors}</div><div class="l">Visitors, last ${T.days} days</div><div class="c">${esc(change(T.visitors,T.prev_visitors))}</div></div>
+    <div class="tile"><div class="n">${T.views}</div><div class="l">Page views</div><div class="c">${esc(change(T.views,T.prev_views))}</div></div>
+    <div class="tile"><div class="n">${T.today_visitors}</div><div class="l">Visitors today</div><div class="c">${T.today_views} page view${T.today_views===1?'':'s'}</div></div>
+    <div class="tile"><div class="n">${T.visitors?(T.views/T.visitors).toFixed(1):'0'}</div><div class="l">Pages per visit</div></div>
+  </div>
+  <h3 class="disp" style="font-size:26px;margin-bottom:12px">Each day</h3>${chart}
+  <div class="g2"><div><h3 class="disp" style="font-size:26px;margin-bottom:12px">Top pages</h3>${list(T.pages,r=>pageName(r.path),r=>r.views,r=>r.visitors+' visitor'+(r.visitors===1?'':'s'))}</div>
+  <div><h3 class="disp" style="font-size:26px;margin-bottom:12px">Where they came from</h3>${list(refs,r=>r.ref,r=>r.visitors)}
+  <h3 class="disp" style="font-size:26px;margin:26px 0 12px">Devices</h3>${list(T.devices,r=>({mobile:'Phone',tablet:'Tablet',desktop:'Computer',unknown:'Unknown'}[r.device]||r.device),r=>r.visitors)}</div></div>
+  <div class="note" style="margin-top:30px"><strong>Your own visits.</strong> ${off?'This device is not being counted.':'This device is being counted.'} <button class="btn sm" data-act="tnotrack" style="margin-left:8px">${off?'Count my visits again':"Don't count my visits on this device"}</button></div>`;
 }
 
 /* ----- shop (admin) ----- */
@@ -561,7 +626,9 @@ document.addEventListener('click',e=>{
   const t=e.target.closest('[data-act]');if(!t||t.tagName==='INPUT')return;
   const a=t.dataset.act,id=t.dataset.id;
   run(async()=>{
-    if(a==='tab'){S.tab=t.dataset.tab;S.edit=null;S.addResult=null;render()}
+    if(a==='tab'){S.tab=t.dataset.tab;S.edit=null;S.addResult=null;render();if(S.tab==='traffic')loadTraffic()}
+    else if(a==='tdays'){S.tdays=parseInt(t.dataset.days,10)||30;loadTraffic()}
+    else if(a==='tnotrack'){try{if(localStorage.getItem('sor_no_track')){localStorage.removeItem('sor_no_track');toast('Your visits on this device are counted again')}else{localStorage.setItem('sor_no_track','1');toast('Your visits on this device will not be counted')}}catch(x){toast('This browser would not let me save that',true)}render()}
     else if(a==='new'){S.edit='new';render()}
     else if(a==='edit'){S.edit=id;render()}
     else if(a==='cancel'){S.edit=null;render()}
