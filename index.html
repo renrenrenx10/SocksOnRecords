@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Socks On Records | DIY punk label, Peterborough &amp; King's Lynn</title>
+<title>Socks On Records | DIY Alt/Punk label and gig putteronners. Peterborough.</title>
 <meta name="description" content="Socks On Records is a DIY, non-profit record label and gig promoter in Peterborough and King's Lynn. Meet the bands, find gigs, releases, videos, Socks On Sessions and merch.">
 <link rel="canonical" href="https://socksonrecords.uk/">
 <meta name="robots" content="index, follow, max-image-preview:large">
@@ -13,7 +13,7 @@
 <meta property="og:site_name" content="Socks On Records">
 <meta property="og:locale" content="en_GB">
 <meta property="og:type" content="website">
-<meta property="og:title" content="Socks On Records | DIY punk label, Peterborough &amp; King's Lynn">
+<meta property="og:title" content="Socks On Records | DIY Alt/Punk label and gig putteronners. Peterborough.">
 <meta property="og:description" content="Socks On Records is a DIY, non-profit record label and gig promoter in Peterborough and King's Lynn. Meet the bands, find gigs, releases, videos, Socks On Sessions and merch.">
 <meta property="og:url" content="https://socksonrecords.uk/">
 <meta property="og:image" content="https://socksonrecords.uk/og-image.jpg">
@@ -21,7 +21,7 @@
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Socks On Records logo">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Socks On Records | DIY punk label, Peterborough &amp; King's Lynn">
+<meta name="twitter:title" content="Socks On Records | DIY Alt/Punk label and gig putteronners. Peterborough.">
 <meta name="twitter:description" content="Socks On Records is a DIY, non-profit record label and gig promoter in Peterborough and King's Lynn. Meet the bands, find gigs, releases, videos, Socks On Sessions and merch.">
 <meta name="twitter:image" content="https://socksonrecords.uk/og-image.jpg">
 <script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "Organization", "@id": "https://socksonrecords.uk/#org", "name": "Socks On Records", "url": "https://socksonrecords.uk/", "logo": "https://socksonrecords.uk/apple-touch-icon.png", "image": "https://socksonrecords.uk/og-image.jpg", "description": "DIY, non-profit record label, gig promoters and community in Peterborough and King's Lynn.", "email": "socksonrecords@gmail.com", "areaServed": "East of England", "sameAs": ["https://www.instagram.com/socks_on_records/", "https://www.instagram.com/socksongraphics/", "https://socksonrecords.bigcartel.com/"]}, {"@type": "WebSite", "@id": "https://socksonrecords.uk/#site", "url": "https://socksonrecords.uk/", "name": "Socks On Records", "inLanguage": "en-GB", "publisher": {"@id": "https://socksonrecords.uk/#org"}}]}</script>
@@ -80,8 +80,8 @@ img{display:block;max-width:100%}
 .band-card{overflow:hidden}
 .band-card img{aspect-ratio:1/1;width:100%;object-fit:cover;border-bottom:2px solid var(--ink);display:block}
 .band-card .imglink{display:block}
-.band-card .btns{display:flex;gap:6px;flex-wrap:nowrap}
-.band-card .btn{min-height:38px;font-size:13px;padding:0 9px;gap:4px;box-shadow:2px 2px 0 var(--ink);white-space:nowrap;flex:0 1 auto;min-width:0}
+.band-card .btns{display:flex;gap:8px;flex-wrap:wrap}
+.band-card .btn{min-height:40px;font-size:14px;padding:0 12px;gap:4px;box-shadow:2px 2px 0 var(--ink);white-space:nowrap;flex:1 1 104px;min-width:max-content}
 .split{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:56px;align-items:center}
 .split.rev{grid-template-columns:minmax(0,7fr) minmax(0,5fr);align-items:start}
 .cover{aspect-ratio:1/1;border:2px solid var(--ink);display:flex;flex-direction:column;justify-content:space-between;padding:16px;box-shadow:4px 4px 0 var(--ink)}
@@ -141,6 +141,7 @@ img{display:block;max-width:100%}
 .grow{grid-template-columns:minmax(0,1fr)}
 }
 @media (max-width:760px){.nav{justify-content:flex-start;flex-basis:100%}}
+@media (max-width:380px){.band-card>div{padding:14px 10px 16px!important}.band-card .btn{font-size:13px;padding:0 6px;min-width:0;flex:1 1 100%}.band-card h2{font-size:21px!important}}
 @media (max-width:520px){.g6{grid-template-columns:repeat(2,minmax(0,1fr))}.g4{gap:18px}.sec{padding:48px 0}.banner .logo{width:120px}.nav{gap:0 16px}.nav a{font-size:17px}}
 @media (max-width:900px){.gig.hasp{grid-template-columns:minmax(0,1fr)}.gig .poster{border-left:0;border-top:2px solid var(--ink)}.gig .poster img{height:auto;max-height:520px;object-fit:contain}}
 </style>
@@ -309,7 +310,7 @@ function home(){
 }
 
 function roster(){
-  const cards=BANDS.map(b=>`<article class="card band-card"><a class="imglink" href="#/band/${esc(b.slug)}" aria-label="${esc(b.name)}"><img src="${imgUrl(bandImg(b))}" alt="${esc(b.name)}" loading="lazy"></a><div style="padding:16px 16px 18px"><h2 class="disp" style="font-size:25px;margin-bottom:6px">${esc(b.name)}</h2><p class="mono" style="margin-bottom:16px;color:var(--muted)">${esc(b.location)||'&nbsp;'}</p><div class="btns"><a class="btn small red" href="#/band/${esc(b.slug)}">Meet them</a>${safeUrl(b.bandcamp_url)?`<a class="btn small" href="${safeUrl(b.bandcamp_url)}">Bandcamp &#8599;</a>`:''}</div></div></article>`).join('');
+  const cards=BANDS.map(b=>`<article class="card band-card"><a class="imglink" href="#/band/${esc(b.slug)}" aria-label="${esc(b.name)}"><img src="${imgUrl(bandImg(b))}" alt="${esc(b.name)}" loading="lazy"></a><div style="padding:16px 16px 18px"><h2 class="disp" style="font-size:25px;margin-bottom:6px">${esc(b.name)}</h2><p class="mono" style="margin-bottom:16px;color:var(--muted)">${esc(b.location)||'&nbsp;'}</p><div class="btns"><a class="btn small red" href="#/band/${esc(b.slug)}">Meet them</a>${safeUrl(b.bandcamp_url)?`<a class="btn small" href="${safeUrl(b.bandcamp_url)}">Hear them &#8599;</a>`:''}</div></div></article>`).join('');
   return head(BANDS.length+' bands and counting','The roster',"Your mate's band, your mate's mate's band. Every act on the label, from Peterborough to Varese.")+`<section style="padding:64px 0 88px"><div class="wrap"><div class="g4">${cards}</div></div></section>`;
 }
 
@@ -689,7 +690,7 @@ function route(){
   document.querySelectorAll('.nav a[data-p]').forEach(x=>x.classList.toggle('on',x.dataset.p===(key==='band'?'roster':key)));
   const names={home:'Home',roster:'Roster',band:'Band',gigs:'Gigs',releases:'Releases',videos:'Videos',sessions:'Socks On Sessions',shop:'Merch & Tickets',play:'Play a show',book:'Book a band',tacos:'Tacos & Flipflops',contact:'Contact'};
   if(key==='band'){const bb=BANDS.find(x=>x.slug===parts[1]);if(bb)names.band=bb.name}
-  document.title=(key==='home'||!names[key])?"Socks On Records | DIY punk label, Peterborough & King's Lynn":names[key]+' | Socks On Records';
+  document.title=(key==='home'||!names[key])?"Socks On Records | DIY Alt/Punk label and gig putteronners. Peterborough.":names[key]+' | Socks On Records';
   window.scrollTo(0,0);
   const f=document.getElementById('c-form');
   if(f) f.addEventListener('submit',e=>{e.preventDefault();
