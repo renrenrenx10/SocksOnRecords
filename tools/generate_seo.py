@@ -3,7 +3,7 @@
 
 The main site is one interactive page, which search engines and link previews can't see into.
 This script reads the live data from Supabase and writes plain, fast, crawlable pages:
-  /roster/  /band/<slug>/  /gigs/  /releases/  /videos/  /sessions/  /play/  /book/  /tacos/  /merch/  /contact/  /404.html
+  /roster/  /band/<slug>/  /gigs/  /releases/  /videos/  /sessions/  /play/  /book/  /tacos/  /friends/  /merch/  /contact/  /404.html
 plus sitemap.xml and robots.txt. It runs by itself every day on GitHub (see .github/workflows/seo.yml),
 or run it yourself:   python tools/generate_seo.py        (needs only Python 3, no installs)
 To test without the network:   python tools/generate_seo.py --from-json sample.json
@@ -16,7 +16,7 @@ KEY = "sb_publishable__XrZLQTrqwf9xeLBn5xI7w_vVgFJzCf"
 ROOT = os.environ.get("SEO_ROOT") or os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 OG_DEFAULT = SITE + "/og-image.jpg"
 NAME = "Socks On Records"
-TAG = "DIY punk label, Peterborough & King's Lynn"
+TAG = "DIY Alt/Punk label and gig putteronners. Peterborough."
 DESC = ("Socks On Records is a DIY, non-profit record label and gig promoter in Peterborough and King's Lynn. "
         "Meet the bands, find gigs, releases, videos, Socks On Sessions and merch.")
 e = lambda s: html.escape(str(s if s is not None else ""), quote=True)
@@ -60,6 +60,8 @@ def load():
         try: d[k] = get(q)
         except Exception as ex: print("skipped", k, ex); d[k] = []
     d["releases"] = sort_releases(d["releases"])
+    try: d["friends"] = get("friends?select=name,what,place,contact&published=eq.true&order=sort_order.asc,name.asc")
+    except Exception as ex: print("skipped friends", ex); d["friends"] = []
     return d
 
 # ---------------------------------------------------------------- helpers
@@ -82,7 +84,7 @@ def ld(obj): return '<script type="application/ld+json">' + json.dumps(obj, ensu
 
 NAV = [("roster", "Roster"), ("gigs", "Gigs"), ("releases", "Releases"), ("videos", "Videos"),
        ("sessions", "Sessions"), ("play", "Play a show"), ("book", "Book a band"), ("https://socksonrecords.bigcartel.com/", "Merch"),
-       ("tacos", "Tacos &amp; Flipflops"), ("contact", "Contact")]
+       ("tacos", "Tacos &amp; Flipflops"), ("friends", "Friends"), ("contact", "Contact")]
 
 def page(path, title, desc, body, image=None, jsonld=None, og_type="website", spa=None, noindex=False):
     url = SITE + "/" + path
@@ -281,6 +283,20 @@ def build(d):
         '<li><strong>Catering:</strong> event buffets, and the Taco Shack for festival-style weddings and parties.</li></ul>'
         '<p><a class="btn" href="https://tacosandflipflops-23457721184.mywebsite.im/">Visit their website</a> '
         '<a class="btn" href="https://tacosandflipflops-23457721184.mywebsite.im/gallery">See the food</a></p>', spa="#/tacos"))
+
+    # --- friends of ours
+    fr = d.get("friends") or []
+    def friend_li(f):
+        c = (f.get("contact") or "").strip()
+        if re.match(r"^https?://", c): how = f' <a href="{e(c)}" rel="noopener">{e(re.sub(r"^https?://(www\.)?", "", c).rstrip("/"))}</a>'
+        elif re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", c): how = f' <a href="mailto:{e(c)}">{e(c)}</a>'
+        else: how = f" {e(c)}" if c else ""
+        bits = ", ".join(x for x in (f.get("what"), f.get("place")) if x)
+        return f"<li><strong>{e(f['name'])}</strong>" + (f": {e(bits)}." if bits else "") + how + "</li>"
+    urls.append(page("friends/", "Friends of ours: labels, promoters and DIY mates",
+        "Labels, gig promoters, bands and good people doing their own DIY thing, recommended by Socks On Records.",
+        '<h1>Friends of ours</h1><p class="lead">Labels, promoters, bands and good people doing their own thing. Go and say hello.</p>'
+        + ("<ul>" + "".join(friend_li(f) for f in fr) + "</ul>" if fr else "") , spa="#/friends"))
 
     # --- contact
     urls.append(page("contact/", "Contact", "Get in touch with Socks On Records: gigs, releases, press and bands. Email socksonrecords@gmail.com or message us on Instagram.",

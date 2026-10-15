@@ -119,6 +119,7 @@ async function load(){
     const tryLoad=async q=>{const r=await q;return r.error?null:r.data};
     S.videos=await tryLoad(db.from('videos').select('*,bands(name)').order('sort_order').order('created_at',{ascending:false}));
     S.sessions=await tryLoad(db.from('sessions').select('*,bands(name)').order('session_date',{ascending:false,nullsFirst:false}));
+    S.friends=await tryLoad(db.from('friends').select('*').order('sort_order').order('name'));
     S.shop=await tryLoad(db.from('shop_items').select('*').order('kind').order('sort_order').order('created_at'));
     S.subs=await tryLoad(db.from('subscribers').select('*').order('created_at',{ascending:false}));
     const st=await db.from('site_settings').select('*').eq('key','featured_release').maybeSingle();
@@ -145,7 +146,7 @@ function render(){
   if(!S.ready){app.innerHTML='<p class="mono">Loading…</p>';return}
   if(!S.profile){app.innerHTML=`<div class="card"><h2 class="disp" style="margin-bottom:10px">Something's off</h2><p>You're signed in, but there's no profile for you yet. Ask Roy to check your invite.</p></div>`;return}
   if(!S.admin&&!S.mine.length){app.innerHTML=`<div class="card"><h2 class="disp" style="margin-bottom:10px">You're in</h2><p>You're signed in, but you're not linked to a band yet. Ask Roy to link your login to your band and you'll be able to edit it here.</p></div>${accountView()}`;return}
-  const tabs=S.admin?[['bands','Bands'],['gigs','Gigs'],['releases','Releases'],['featured','Featured'],['videos','Videos'],['sessions','Sessions'],['shop','Shop'],['subs','Newsletter'],['traffic','Traffic'],['people','Users'],['account','Account']]:[['bands',S.mine.length>1?'My bands':'My band'],['gigs','Gigs'],['releases','Releases'],['account','Account']];
+  const tabs=S.admin?[['bands','Bands'],['gigs','Gigs'],['releases','Releases'],['featured','Featured'],['videos','Videos'],['sessions','Sessions'],['friends','Friends'],['shop','Shop'],['subs','Newsletter'],['traffic','Traffic'],['people','Users'],['account','Account']]:[['bands',S.mine.length>1?'My bands':'My band'],['gigs','Gigs'],['releases','Releases'],['account','Account']];
   if(!tabs.some(t=>t[0]===S.tab))S.tab='bands';
   const tb=`<div class="tabs" role="tablist">${tabs.map(t=>`<button role="tab" class="${S.tab===t[0]?'on':''}" data-act="tab" data-tab="${t[0]}">${t[1]}</button>`).join('')}</div>`;
   let body='';
@@ -155,6 +156,7 @@ function render(){
   else if(S.tab==='featured')body=featuredView();
   else if(S.tab==='videos')body=S.edit?videoForm():videosView();
   else if(S.tab==='sessions')body=S.edit?sessionForm():sessionsView();
+  else if(S.tab==='friends')body=S.edit?friendForm():friendsView();
   else if(S.tab==='shop')body=S.edit?shopForm():shopView();
   else if(S.tab==='subs')body=subsView();
   else if(S.tab==='traffic')body=trafficView();
@@ -485,7 +487,7 @@ async function loadTraffic(){
   if(S.tab==='traffic')render();
 }
 function pageName(p){
-  const fixed={'/':'Home','/roster/':'Roster','/gigs/':'Gigs','/releases/':'Releases','/videos/':'Videos','/sessions/':'Socks On Sessions','/shop/':'Merch & Tickets','/play/':'Play a show','/book/':'Book a band','/tacos/':'Tacos & Flipflops','/contact/':'Contact'};
+  const fixed={'/':'Home','/roster/':'Roster','/gigs/':'Gigs','/releases/':'Releases','/videos/':'Videos','/sessions/':'Socks On Sessions','/shop/':'Merch & Tickets','/play/':'Play a show','/book/':'Book a band','/tacos/':'Tacos & Flipflops','/friends/':'Friends of ours','/contact/':'Contact'};
   if(fixed[p])return fixed[p];
   const m=p.match(/^\/band\/([^/]+)\/$/);
   if(m){const b=S.bands.find(x=>x.slug===m[1]);return 'Band: '+(b?b.name:m[1])}
@@ -522,6 +524,31 @@ function trafficView(){
   <div><h3 class="disp" style="font-size:26px;margin-bottom:12px">Where they came from</h3>${list(refs,r=>r.ref,r=>r.visitors)}
   <h3 class="disp" style="font-size:26px;margin:26px 0 12px">Devices</h3>${list(T.devices,r=>({mobile:'Phone',tablet:'Tablet',desktop:'Computer',unknown:'Unknown'}[r.device]||r.device),r=>r.visitors)}</div></div>
   <div class="note" style="margin-top:30px"><strong>Your own visits.</strong> ${off?'This device is not being counted.':'This device is being counted.'} <button class="btn sm" data-act="tnotrack" style="margin-left:8px">${off?'Count my visits again':"Don't count my visits on this device"}</button></div>`;
+}
+
+/* ----- friends of ours (admin) ----- */
+function friendsView(){
+  if(!S.friends)return `<div class="bar"><h2 class="disp">Friends</h2></div>`+setupNote('14-friends.sql');
+  return `<div class="bar"><h2 class="disp">Friends of ours</h2><button class="btn red" data-act="new">+ Add a friend</button></div>
+  <p class="note">These show on the <strong>Friends of ours</strong> page. For each one: who they are, what they do, where they are, and how to find them. In <strong>How</strong>, put a website (starting https://), an email address, or just text like an Instagram handle. Websites and emails become buttons.</p>
+  ${S.friends.length?S.friends.map(f=>`<div class="row"><div style="min-width:220px;flex:1"><div class="t">${esc(f.name)}${f.published?'':'<span class="tag bad">Hidden</span>'}</div><div class="s">${esc([f.what,f.place,f.contact].filter(Boolean).join(' · '))}</div></div><div class="a"><button class="btn sm" data-act="edit" data-id="${f.id}">Edit</button></div></div>`).join(''):'<p>Nobody yet.</p>'}`;
+}
+function friendForm(){
+  const isNew=S.edit==='new',f=isNew?{published:true,sort_order:0}:S.friends.find(x=>x.id===S.edit);
+  if(!f){S.edit=null;return friendsView()}
+  return `<form class="card" data-form="friend" data-id="${isNew?'':f.id}"><h2 class="disp" style="margin-bottom:18px">${isNew?'Add a friend':'Edit '+esc(f.name)}</h2>
+  <div class="g2">${F('Who','name',f.name,{req:1,ph:'Horn and Hoof Records'})}${F('What they do','what',f.what,{ph:'Label and gig promoter'})}</div>
+  <div class="g2">${F('Where','place',f.place,{ph:'Manchester / Stockport'})}${F('How to find them','contact',f.contact,{ph:'https://… or an email address',hint:'A website (https://…) or an email becomes a button. Anything else shows as text.'})}</div>
+  <div class="g2">${F('Order','sort_order',f.sort_order,{type:'number',hint:'Lower numbers come first.'})}<div></div></div>
+  <label class="chk" style="margin-bottom:18px"><input type="checkbox" name="published" ${f.published?'checked':''}> Show on the site</label>
+  <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn red" type="submit">Save</button><button class="btn" type="button" data-act="cancel">Cancel</button>${!isNew?`<button class="btn" type="button" data-act="delFriend" data-id="${f.id}" style="margin-left:auto">Delete</button>`:''}</div></form>`;
+}
+async function saveFriend(form){
+  const id=form.dataset.id,d=new FormData(form);
+  const row={name:nul(d.get('name')),what:nul(d.get('what')),place:nul(d.get('place')),contact:nul(d.get('contact')),sort_order:parseInt(d.get('sort_order'),10)||0,published:d.has('published')};
+  if(!row.name)throw new Error('Put who they are');
+  if(row.contact&&/^www\./i.test(row.contact))row.contact='https://'+row.contact;
+  if(id)ck(await db.from('friends').update(row).eq('id',id));else ck(await db.from('friends').insert(row));
 }
 
 /* ----- shop (admin) ----- */
@@ -641,6 +668,7 @@ document.addEventListener('click',e=>{
     else if(a==='setAdmin'){const on=t.dataset.v==='1';if(!confirm(on?'Make '+t.dataset.name+' an admin? They will be able to edit everything, including other people\'s logins.':'Remove admin from '+t.dataset.name+'? They will keep access to their own bands.'))return;
       if(S.users){ck(await db.rpc('admin_set_admin',{p_user:id,p_admin:on}))}else{ck(await db.from('profiles').update({is_admin:on}).eq('id',id))}
       await reload();toast(t.dataset.name+(on?' is now an admin':' is no longer an admin'))}
+    else if(a==='delFriend'){if(confirm('Delete this friend from the list?')){ck(await db.from('friends').delete().eq('id',id));S.edit=null;await reload();toast('Removed')}}
     else if(a==='delVideo'){if(confirm('Delete this video?')){ck(await db.from('videos').delete().eq('id',id));S.edit=null;await reload();toast('Video deleted')}}
     else if(a==='delSession'){if(confirm('Delete this session?')){ck(await db.from('sessions').delete().eq('id',id));S.edit=null;await reload();toast('Session deleted')}}
     else if(a==='delShop'){if(confirm('Delete this item?')){ck(await db.from('shop_items').delete().eq('id',id));S.edit=null;await reload();toast('Item deleted')}}
@@ -687,6 +715,7 @@ app.addEventListener('submit',e=>{
       else if(kind==='featured'){await saveFeatured(f);toast('Saved. The Releases page shows it straight away.')}
       else if(kind==='release'){await saveRelease(f);S.edit=null;await reload();toast('Release saved')}
       else if(kind==='shop'){await saveShop(f);S.edit=null;await reload();toast('Item saved')}
+      else if(kind==='friend'){await saveFriend(f);S.edit=null;await reload();toast('Saved. The Friends page shows it straight away.')}
       else if(kind==='video'){await saveVideo(f);S.edit=null;await reload();toast('Video saved')}
       else if(kind==='session'){await saveSession(f);S.edit=null;await reload();toast('Session saved')}
     }finally{if(btn&&document.body.contains(btn))btn.disabled=false}
