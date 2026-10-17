@@ -596,6 +596,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   var profileCache = {};     // user id -> display name, filled in as pages are loaded
   var saveTimer = null;
   var suppressSave = false;  // true while hydrating a page from the DB, so loading never re-triggers a save
+  var saveFailedAlerted = false; // only pop one alert per run of failures, not one per keystroke/debounce tick
 
   var authGate = document.getElementById("authGate");
   var authForm = document.getElementById("authForm");
@@ -1223,8 +1224,17 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       if(res.error){
         console.error("zine save failed", res.error);
         setSaveStatus("Couldn't save — check your connection", "err");
+        // A failed save used to be silent unless you happened to glance at the small status line --
+        // easy to miss, and the edit then looked fine locally right up until something reloaded
+        // from the database and the "saved" work turned out never to have actually been written.
+        // One alert per run of failures (reset below on the next success) makes that impossible to miss.
+        if(!saveFailedAlerted){
+          saveFailedAlerted = true;
+          alert("This page didn't save: " + (res.error.message || "unknown error") + "\n\nKeep editing if you like, but it won't be kept until this is fixed -- check your connection, or that you have permission to edit this page.");
+        }
         return;
       }
+      saveFailedAlerted = false;
       setSaveStatus("All changes saved");
     });
   }
@@ -2823,8 +2833,21 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     if(filteredEls.length === 0) return captureFn();
 
     var swaps = [];
-    function bakeOne(e){
-      var div = domMap[e.id];
+    var imgSrcSwaps = [];
+
+    // Bakes one piece by screenshotting it, then running that screenshot through a 2D canvas with
+    // the copier SVG filter applied via ctx.filter, then reading the result back out with
+    // toDataURL(). That last step throws a SecurityError if the screenshot contains any
+    // cross-origin pixel data the browser didn't consider CORS-cleared ("tainted canvas") --
+    // which can happen even though the image displays completely normally on screen (an <img> tag
+    // doesn't need CORS to display, only a canvas read of it does), e.g. if a Supabase Storage
+    // response is missing Access-Control-Allow-Origin for some reason even on a public file. When
+    // that happens, re-point every <img> in the piece at the CORS-safe weserv.nl proxy (already
+    // used elsewhere in this app for non-Supabase images) and retry once before giving up --
+    // otherwise the piece silently falls through to the final whole-page screenshot completely
+    // unbaked, which *can* capture the CSS filter, but html2canvas doesn't support CSS `filter` at
+    // all, so it comes out in plain, un-photocopied colour instead.
+    function bakeAttempt(div){
       return html2canvas(div, { backgroundColor: null, scale: 3, useCORS: true }).then(function(sub){
         var filterCanvas = document.createElement("canvas");
         filterCanvas.width = sub.width;
@@ -2832,8 +2855,32 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
         var fctx = filterCanvas.getContext("2d");
         fctx.filter = "url(#copier)";
         fctx.drawImage(sub, 0, 0);
+        return filterCanvas.toDataURL("image/png"); // throws SecurityError on a tainted canvas
+      });
+    }
+    function retryThroughProxy(div){
+      var imgs = Array.prototype.slice.call(div.querySelectorAll("img")).filter(function(img){ return img.src; });
+      if(imgs.length === 0) return Promise.reject(new Error("nothing to retry"));
+      return Promise.all(imgs.map(function(img){
+        var bare = img.src.replace(/^https?:\/\//, "");
+        var proxied = "https://images.weserv.nl/?url=" + encodeURIComponent(bare);
+        if(img.src === proxied) return Promise.resolve(); // already proxied -- retrying won't help
+        var original = img.src;
+        return new Promise(function(res){
+          img.addEventListener("load", res, { once:true });
+          img.addEventListener("error", res, { once:true });
+          img.crossOrigin = "anonymous";
+          img.src = proxied;
+        }).then(function(){ imgSrcSwaps.push({ img: img, original: original }); });
+      })).then(function(){ return bakeAttempt(div); });
+    }
+    function bakeOne(e){
+      var div = domMap[e.id];
+      return bakeAttempt(div).catch(function(){
+        return retryThroughProxy(div);
+      }).then(function(dataUrl){
         var overlay = document.createElement("img");
-        overlay.src = filterCanvas.toDataURL("image/png");
+        overlay.src = dataUrl;
         overlay.style.position = "absolute";
         overlay.style.inset = "0";
         overlay.style.width = "100%";
@@ -2852,6 +2899,9 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
         s.overlay.remove();
         s.hidden.forEach(function(c){ c.style.visibility = ""; });
       });
+      // put every image src we swapped to the proxy back to its real URL -- the retry is for the
+      // export bake only, live editing should keep using the fast, direct URL
+      imgSrcSwaps.forEach(function(s){ s.img.src = s.original; });
     }
 
     var chain = Promise.resolve();
@@ -2886,6 +2936,12 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       alert("Couldn't load the PDF export tools — check your connection and try again.");
       return;
     }
+    // Make sure whatever's being actively edited right now is captured into its row before the
+    // loop below grabs `rows` and starts switching pages -- the first switchToPage() call already
+    // flushes the outgoing page as a side effect, but doing it explicitly here means that's never
+    // an incidental side effect this depends on, and the save has actually been kicked off (not
+    // just queued) before rendering starts.
+    flushSave();
     var rows = pagesInIssue(currentIssue);
     if(rows.length === 0){ alert("This issue has no pages yet."); return; }
     var returnTo = currentPageRow;
@@ -2953,6 +3009,9 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       alert("Couldn't load the PDF export tools — check your connection and try again.");
       return;
     }
+    // see the matching comment in exportIssuePdf() -- flush before grabbing rows, not just relying
+    // on switchToPage()'s incidental flush
+    flushSave();
     var rows = pagesInIssue(currentIssue);
     if(rows.length === 0){ alert("This issue has no pages yet."); return; }
     var returnTo = currentPageRow;
