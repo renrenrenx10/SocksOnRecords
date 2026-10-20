@@ -946,10 +946,25 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     var other = index + dir;
     if(other < 0 || other >= rows.length) return;
     var a = rows[index], b = rows[other];
+    var aOld = a.page_order, bOld = b.page_order;
     var tmp = a.page_order; a.page_order = b.page_order; b.page_order = tmp;
     renderPageList();
-    sb.from("zine_pages").update({ page_order: a.page_order }).eq("id", a.id).then(function(){});
-    sb.from("zine_pages").update({ page_order: b.page_order }).eq("id", b.id).then(function(){});
+    Promise.all([
+      sb.from("zine_pages").update({ page_order: a.page_order }).eq("id", a.id),
+      sb.from("zine_pages").update({ page_order: b.page_order }).eq("id", b.id)
+    ]).then(function(results){
+      var failed = results.some(function(res){ return res && res.error; });
+      if(failed){
+        // roll back the local swap so the UI doesn't show an order that didn't actually save
+        a.page_order = aOld; b.page_order = bOld;
+        renderPageList();
+        alert("Couldn't reorder that page (the change didn't save). This can happen if you don't have permission to move one of these pages. Nothing was changed.");
+      }
+    }).catch(function(){
+      a.page_order = aOld; b.page_order = bOld;
+      renderPageList();
+      alert("Couldn't reorder that page (a network or server error). Nothing was changed.");
+    });
   }
 
   // --- spreads: edit two facing pages together so a piece can be dragged across the gutter ---
