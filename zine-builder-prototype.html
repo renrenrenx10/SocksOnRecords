@@ -126,7 +126,7 @@ body:not(.authed) #app{display:none}
    .shape is the inner visual card: background, clip-path, border, font, text -- all live here. */
 .el{position:absolute;box-sizing:border-box;cursor:grab}
 .el.dragging{cursor:grabbing}
-.shape{position:absolute;inset:0;box-sizing:border-box;display:flex;align-items:center;justify-content:center;text-align:center;padding:4%;overflow:hidden;line-height:1.25}
+.shape{position:absolute;inset:0;box-sizing:border-box;display:flex;align-items:center;justify-content:center;text-align:center;padding:4%;overflow:hidden;line-height:1.25;white-space:pre-wrap}
 .el.text .shape,.el.bubble .shape,.el.ticket .shape{text-align:left;display:block}
 .shape[contenteditable="true"]{cursor:text;outline:1.5px dashed var(--accent);outline-offset:1px}
 .el.photo .shape{overflow:hidden;padding:0}
@@ -321,6 +321,7 @@ body:not(.authed) #app{display:none}
         <button data-add="doodle">+ Doodle</button>
         <button id="addGigBtn">+ Gig listing</button>
         <button id="addReleaseBtn">+ Release listing</button>
+        <button id="addTocBtn">+ Contents list</button>
         <button id="addCrosswordBtn">+ Crossword</button>
         <button id="addComicGridBtn">+ Comic panels</button>
       </div>
@@ -497,6 +498,7 @@ body:not(.authed) #app{display:none}
     <ul>
       <li>Add text scraps, a photo, a headline bar, a burst, a speech bubble, a circle badge, an arrow banner, a ticket stub, a stamp, an outlined note or a lightning bolt.</li>
       <li>Add a gig listing pulled straight from the Socks On Records site (upcoming gigs only) — tap it in "+ Gig listing" and it drops in as editable text.</li>
+      <li>Add a contents list with "+ Contents list" — pulls every page's title and number from the current issue as one editable text piece, so you can tweak the wording afterwards.</li>
       <li>Pages, issues, publishing and the PDF export live under their own "📑 Pages" button, separate from the Menu.</li>
       <li>Drag a piece to move it, drag its red dot to resize, drag its green dot to rotate — or use "Tilt it" / "Straighten" for a quick angle.</li>
       <li>Tap a selected text piece again to edit the words.</li>
@@ -862,6 +864,23 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       releaseList.appendChild(row);
     });
   }
+
+  // --- contents list: a one-shot pull of this issue's own pages (title + page number), dropped
+  // in as a plain editable text piece -- same pattern as the gig/release listings above, just
+  // sourced from the zine's own pages instead of the website. Numbers match what the Pages list
+  // shows ("Page N — title"), so they stay correct even for untitled pages.
+  function buildContentsText(){
+    var pages = pagesInIssue(currentIssue);
+    return pages.map(function(p, i){
+      var n = i + 1;
+      var title = (p.title || "").trim();
+      return n + ". " + (title || ("Page " + n));
+    }).join("\n");
+  }
+  document.getElementById("addTocBtn").addEventListener("click", function(){
+    addEl("text", { x:10, y:6, w:80, h:85, content: buildContentsText() });
+    closeDrawer();
+  });
 
   // --- pages: list, load, create, reorder, delete ---
   function loadPages(){
@@ -1623,6 +1642,23 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     scheduleSave();
   }
 
+  // Reads a contenteditable shape's content back out as plain text, turning each <br> (how a
+  // manual line break actually lands in the DOM -- see onKeydown in enterEdit) into a literal
+  // "\n", the same way updateDiv's plain-content render expects it. Recurses into any other
+  // wrapper element too, as a fallback in case the browser still splits off a <div>/<p> block
+  // (e.g. on a pasted multi-line selection) -- that still loses the implicit line break between
+  // blocks, but at least keeps the text itself rather than dropping it.
+  function editableToPlainText(root){
+    var out = "";
+    function walk(node){
+      if(node.nodeType === Node.TEXT_NODE){ out += node.nodeValue; }
+      else if(node.nodeName === "BR"){ out += "\n"; }
+      else if(node.childNodes){ for(var i=0;i<node.childNodes.length;i++) walk(node.childNodes[i]); }
+    }
+    for(var i=0;i<root.childNodes.length;i++) walk(root.childNodes[i]);
+    return out;
+  }
+
   // Steps a piece's font size down (in cqw, same unit it was set in) until its text fits the
   // box, instead of just getting clipped. Floors at 40% of the chosen size rather than shrinking
   // to nothing -- past that point the text is genuinely too long for the piece, not just a size tweak.
@@ -2132,19 +2168,35 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 
     function onInput(){
       var e = byId(id);
-      if(e) e.content = shapeEl.textContent;
+      if(e) e.content = editableToPlainText(shapeEl);
       renderLayers();
       scheduleSave();
+    }
+    // Pressing Enter in a contenteditable normally starts a new <div>/<p> block rather than a
+    // line break -- plain textContent then runs the two blocks together with no separator, so
+    // the manual line break silently vanishes (most visible when the merged line is short
+    // enough to still fit the box, since then nothing even looks wrapped). insertLineBreak
+    // instead drops in a real <br>, which keeps typing afterwards working normally (a literal
+    // "\n" text node turned out to leave the caret somewhere the browser wouldn't type into);
+    // editableToPlainText() then turns that <br> back into "\n" when reading the content back
+    // out, and the shape's white-space:pre-wrap renders a "\n" as a real line break on display.
+    function onKeydown(ev){
+      if(ev.key !== "Enter") return;
+      ev.preventDefault();
+      document.execCommand("insertLineBreak");
+      onInput();
     }
     function onBlur(){
       shapeEl.removeAttribute("contenteditable");
       shapeEl.removeEventListener("input", onInput);
+      shapeEl.removeEventListener("keydown", onKeydown);
       shapeEl.removeEventListener("blur", onBlur);
       var e = byId(id);
       if(e) updateDiv(e); // picks up shrink-to-fit now that typing has settled
       scheduleSave();
     }
     shapeEl.addEventListener("input", onInput);
+    shapeEl.addEventListener("keydown", onKeydown);
     shapeEl.addEventListener("blur", onBlur);
   }
 
