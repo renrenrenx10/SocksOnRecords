@@ -140,9 +140,13 @@ img{display:block;max-width:100%}
 .gig{grid-template-columns:minmax(0,1fr)}.gig .date{flex-direction:row;justify-content:flex-start;align-items:baseline;gap:14px;padding:14px 20px}.gig .date .d{font-size:48px}.gig .body{padding:22px 20px}
 .grow{grid-template-columns:minmax(0,1fr)}
 }
-@media (max-width:760px){.nav{justify-content:flex-start;flex-basis:100%}}
 @media (max-width:380px){.band-card>div{padding:14px 10px 16px!important}.band-card .btn{font-size:13px;padding:0 6px;min-width:0;flex:1 1 100%}.band-card h2{font-size:21px!important}}
 @media (max-width:520px){.g6{grid-template-columns:repeat(2,minmax(0,1fr))}.g4{gap:18px}.sec{padding:48px 0}.banner .logo{width:120px}.nav{gap:0 16px}.nav a{font-size:17px}}
+.menu-btn{display:none;align-items:center;gap:10px;font-family:'Anton',Impact,sans-serif;text-transform:uppercase;font-size:18px;letter-spacing:.04em;background:transparent;color:var(--paper);border:2px solid var(--paper);min-height:44px;padding:0 16px;cursor:pointer}
+.menu-btn:hover,.menu-btn:focus-visible{border-color:var(--sky);color:var(--sky)}
+.menu-btn .bars{width:20px;height:14px;background:linear-gradient(currentColor,currentColor) 0 0/100% 2px no-repeat,linear-gradient(currentColor,currentColor) 0 50%/100% 2px no-repeat,linear-gradient(currentColor,currentColor) 0 100%/100% 2px no-repeat}
+.menu-btn[aria-expanded=true] .bars{background:linear-gradient(45deg,transparent 45%,currentColor 45% 55%,transparent 55%),linear-gradient(-45deg,transparent 45%,currentColor 45% 55%,transparent 55%)}
+@media (max-width:760px){.menu-btn{display:inline-flex;margin-left:auto}.nav{display:none;flex:1 0 100%;flex-direction:column;align-items:stretch;gap:0;padding:4px 0 10px;border-top:1px solid #3a342b}.nav.open{display:flex}.nav a{font-size:22px;min-height:48px;border-bottom:1px solid #2a251e}.nav a.on{border-bottom-color:var(--red)}}
 @media (max-width:900px){.gig.hasp{grid-template-columns:minmax(0,1fr)}.gig .poster{border-left:0;border-top:2px solid var(--ink)}.gig .poster img{height:auto;max-height:520px;object-fit:contain}}
 </style>
 <script src="/track.js" defer></script>
@@ -152,7 +156,8 @@ img{display:block;max-width:100%}
 
 <header class="banner"><div class="wrap">
 <a class="logo" href="#/" aria-label="Socks On Records home"><img src="img/logo.png" alt="Socks On Records"></a>
-<nav class="nav" aria-label="Main">
+<button class="menu-btn" id="menuBtn" type="button" aria-expanded="false" aria-controls="mainnav"><span class="bars" aria-hidden="true"></span><span class="lbl">Menu</span></button>
+<nav class="nav" id="mainnav" aria-label="Main">
 <a data-p="roster" href="#/roster">Roster</a>
 <a data-p="gigs" href="#/gigs">Gigs</a>
 <a data-p="releases" href="#/releases">Releases</a>
@@ -165,7 +170,6 @@ img{display:block;max-width:100%}
 <a data-p="tacos" href="#/tacos">Tacos &amp; Flipflops</a>
 <a data-p="friends" href="#/friends">Friends</a>
 <a data-p="contact" href="#/contact">Contact</a>
-<a class="ext" href="https://www.instagram.com/socksongraphics/">Graphics</a>
 <a href="https://www.instagram.com/socks_on_records/" aria-label="Socks On Records on Instagram"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg></a>
 </nav>
 </div></header>
@@ -775,6 +779,12 @@ async function loadLive(){
     FAILED=true;route();
   }
 }
+(function(){const mb=document.getElementById('menuBtn'),nv=document.getElementById('mainnav');if(!mb||!nv)return;
+function setMenu(o){nv.classList.toggle('open',o);mb.setAttribute('aria-expanded',o?'true':'false');mb.querySelector('.lbl').textContent=o?'Close':'Menu'}
+mb.addEventListener('click',()=>setMenu(!nv.classList.contains('open')));
+nv.addEventListener('click',e=>{if(e.target.closest('a'))setMenu(false)});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')setMenu(false)});
+window.addEventListener('hashchange',()=>setMenu(false));})();
 window.addEventListener('hashchange',route);
 document.querySelectorAll('img[data-logo]').forEach(i=>{i.src=LOGO});
 route();

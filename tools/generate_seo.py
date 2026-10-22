@@ -82,6 +82,8 @@ def fmt_date(s):
 
 def ld(obj): return '<script type="application/ld+json">' + json.dumps(obj, ensure_ascii=False).replace("</", "<\\/") + "</script>"
 
+MENU_JS = "<script>(function(){var b=document.getElementById('menuBtn'),n=document.getElementById('menu');if(!b||!n)return;function s(o){n.classList.toggle('open',o);b.setAttribute('aria-expanded',o?'true':'false');b.lastElementChild.textContent=o?'Close':'Menu'}b.onclick=function(){s(!n.classList.contains('open'))};document.addEventListener('keydown',function(e){if(e.key==='Escape')s(false)})})();</script>"
+
 NAV = [("roster", "Roster"), ("gigs", "Gigs"), ("releases", "Releases"), ("videos", "Videos"),
        ("sessions", "Sessions"), ("zine", "Zine"), ("play", "Play a show"), ("book", "Book a band"), ("https://socksonrecords.bigcartel.com/", "Merch"),
        ("tacos", "Tacos &amp; Flipflops"), ("friends", "Friends"), ("contact", "Contact")]
@@ -122,7 +124,8 @@ def page(path, title, desc, body, image=None, jsonld=None, og_type="website", sp
 <script src="/track.js" defer></script>
 </head>
 <body>
-<header class="top"><div class="w"><a class="logo" href="/"><img src="/logo.png" alt="{NAME}" width="130" height="65"></a><nav aria-label="Main">{nav}</nav></div></header>
+<header class="top"><div class="w"><a class="logo" href="/"><img src="/logo.png" alt="{NAME}" width="130" height="65"></a><button class="menu-btn" id="menuBtn" type="button" aria-expanded="false" aria-controls="menu"><span class="bars" aria-hidden="true"></span><span>Menu</span></button><nav id="menu" aria-label="Main">{nav}</nav></div></header>
+{MENU_JS}
 <main class="w">
 {body}
 <p class="app"><a class="btn" href="{e(app)}">Open the full interactive site &rarr;</a></p>
