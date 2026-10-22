@@ -83,7 +83,7 @@ def fmt_date(s):
 def ld(obj): return '<script type="application/ld+json">' + json.dumps(obj, ensure_ascii=False).replace("</", "<\\/") + "</script>"
 
 NAV = [("roster", "Roster"), ("gigs", "Gigs"), ("releases", "Releases"), ("videos", "Videos"),
-       ("sessions", "Sessions"), ("play", "Play a show"), ("book", "Book a band"), ("https://socksonrecords.bigcartel.com/", "Merch"),
+       ("sessions", "Sessions"), ("zine", "Zine"), ("play", "Play a show"), ("book", "Book a band"), ("https://socksonrecords.bigcartel.com/", "Merch"),
        ("tacos", "Tacos &amp; Flipflops"), ("friends", "Friends"), ("contact", "Contact")]
 
 def page(path, title, desc, body, image=None, jsonld=None, og_type="website", spa=None, noindex=False):
@@ -288,7 +288,9 @@ def build(d):
     fr = d.get("friends") or []
     def friend_li(f):
         c = (f.get("contact") or "").strip()
-        if re.match(r"^https?://", c): how = f' <a href="{e(c)}" rel="noopener">{e(re.sub(r"^https?://(www\.)?", "", c).rstrip("/"))}</a>'
+        if re.match(r"^https?://", c):
+            shown = re.sub(r"^https?://(www\.)?", "", c).rstrip("/")
+            how = f' <a href="{e(c)}" rel="noopener">{e(shown)}</a>'
         elif re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", c): how = f' <a href="mailto:{e(c)}">{e(c)}</a>'
         else: how = f" {e(c)}" if c else ""
         bits = ", ".join(x for x in (f.get("what"), f.get("place")) if x)
@@ -309,7 +311,7 @@ def build(d):
     return urls
 
 def write_sitemap(urls):
-    allu = [SITE + "/"] + urls
+    allu = [SITE + "/"] + urls + ([SITE + "/zine/"] if SITE + "/zine/" not in urls else [])
     x = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + "".join(f"<url><loc>{e(u)}</loc></url>\n" for u in allu) + "</urlset>\n"
     open(os.path.join(ROOT, "sitemap.xml"), "w", encoding="utf-8").write(x)
     open(os.path.join(ROOT, "robots.txt"), "w").write(f"User-agent: *\nAllow: /\nDisallow: /admin.html\n\nSitemap: {SITE}/sitemap.xml\n")
