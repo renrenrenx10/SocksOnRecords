@@ -2923,11 +2923,17 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     var swaps = []; // { img, original } -- restored after capture
 
     function bakeImg(img){
-      var r = img.getBoundingClientRect();
+      // offsetWidth/offsetHeight are the element's own layout box, unaffected by any CSS
+      // `transform` on it or an ancestor (the rotate handle sets `transform: rotate()` on the
+      // piece's outer .el wrapper) -- getBoundingClientRect() would instead return the ROTATED
+      // axis-aligned bounding box, which is a different (larger, wrong-aspect-ratio) rectangle,
+      // and cropping to that shape is what skewed rotated pieces and left grey padding around
+      // them where the oversized bounding box didn't actually have image content.
+      var boxW = img.offsetWidth, boxH = img.offsetHeight;
       var original = img.src;
       var dataUrl;
       try{
-        dataUrl = coverCropDataUrl(img, r.width, r.height);
+        dataUrl = coverCropDataUrl(img, boxW, boxH);
       }catch(err){
         // tainted canvas -- retry once through the CORS-safe proxy already used elsewhere in this
         // file for the same reason (an <img> can display fine cross-origin but still fail a canvas
@@ -2940,7 +2946,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
         img.src = proxied;
         return p.then(function(){
           try{
-            var dataUrl2 = coverCropDataUrl(img, r.width, r.height);
+            var dataUrl2 = coverCropDataUrl(img, boxW, boxH);
             if(!dataUrl2){ img.src = original; return; }
             var p2 = waitImgLoad(img);
             img.src = dataUrl2;
