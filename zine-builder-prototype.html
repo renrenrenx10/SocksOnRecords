@@ -2878,6 +2878,96 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     ]);
   }
 
+  // html2canvas also doesn't support `object-fit: cover` on <img> elements -- confirmed with an
+  // isolated test. Instead of cropping to the box like the browser does live, it just stretches
+  // the ENTIRE source image to fill the box. For a tightly-cropped photo piece (.el.photo .shape
+  // img) or a comic-grid cell (.ccCell img), that means the export shows extra content around the
+  // edges of the photo that was cropped out of view in the live editor -- which is exactly what
+  // looked like a "squish": a photo that's cover-cropped tight live comes back in the exported PDF
+  // showing the whole original image squeezed into the same box.
+  //
+  // Fix: before capturing, replace each object-fit:cover <img>'s src with a pre-cropped version --
+  // draw the correct crop (matching the box's own aspect ratio, cutting off the same overflow the
+  // browser would) onto a canvas and swap in that dataURL. Once the image's own aspect ratio
+  // matches the box exactly, object-fit:cover becomes a no-op, so it doesn't matter that
+  // html2canvas ignores it. Restore every original src afterward. This runs on the whole page
+  // BEFORE withPhotocopyFiltersBaked, so by the time a filtered piece gets individually
+  // screenshotted below, its image is already correctly cropped too.
+  function coverCropDataUrl(img, boxW, boxH){
+    var iw = img.naturalWidth, ih = img.naturalHeight;
+    if(!iw || !ih || !boxW || !boxH) return null;
+    var scale = 2; // plenty sharp; html2canvas re-captures this at its own scale afterward
+    var canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(boxW * scale));
+    canvas.height = Math.max(1, Math.round(boxH * scale));
+    var ctx = canvas.getContext("2d");
+    var boxRatio = boxW / boxH, imgRatio = iw / ih;
+    var sx, sy, sw, sh;
+    if(imgRatio > boxRatio){ sh = ih; sw = ih * boxRatio; sy = 0; sx = (iw - sw) / 2; }
+    else { sw = iw; sh = iw / boxRatio; sx = 0; sy = (ih - sh) / 2; }
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/png"); // throws SecurityError on a tainted canvas
+  }
+  function waitImgLoad(img){
+    return new Promise(function(res){
+      img.addEventListener("load", res, { once:true });
+      img.addEventListener("error", res, { once:true });
+    });
+  }
+  function withObjectFitCoverBaked(root, runFn){
+    var imgs = Array.prototype.slice.call(root.querySelectorAll("img")).filter(function(img){
+      return img.src && img.naturalWidth && getComputedStyle(img).objectFit === "cover";
+    });
+    if(imgs.length === 0) return runFn();
+
+    var swaps = []; // { img, original } -- restored after capture
+
+    function bakeImg(img){
+      var r = img.getBoundingClientRect();
+      var original = img.src;
+      var dataUrl;
+      try{
+        dataUrl = coverCropDataUrl(img, r.width, r.height);
+      }catch(err){
+        // tainted canvas -- retry once through the CORS-safe proxy already used elsewhere in this
+        // file for the same reason (an <img> can display fine cross-origin but still fail a canvas
+        // read if the response wasn't served with CORS headers)
+        var bare = original.replace(/^https?:\/\//, "");
+        var proxied = "https://images.weserv.nl/?url=" + encodeURIComponent(bare);
+        if(original === proxied) return Promise.resolve(); // already proxied, nothing more to try
+        var p = waitImgLoad(img);
+        img.crossOrigin = "anonymous";
+        img.src = proxied;
+        return p.then(function(){
+          try{
+            var dataUrl2 = coverCropDataUrl(img, r.width, r.height);
+            if(!dataUrl2){ img.src = original; return; }
+            var p2 = waitImgLoad(img);
+            img.src = dataUrl2;
+            return p2.then(function(){ swaps.push({ img: img, original: original }); });
+          }catch(err2){ img.src = original; } // give up -- leave it uncropped rather than broken
+        });
+      }
+      if(!dataUrl) return Promise.resolve();
+      var p3 = waitImgLoad(img);
+      img.src = dataUrl;
+      return p3.then(function(){ swaps.push({ img: img, original: original }); });
+    }
+
+    var chain = Promise.resolve();
+    imgs.forEach(function(img){ chain = chain.then(function(){ return bakeImg(img); }); });
+
+    function restoreAll(){ swaps.forEach(function(s){ s.img.src = s.original; }); }
+
+    return chain.then(runFn).then(function(result){
+      restoreAll();
+      return result;
+    }).catch(function(err){
+      restoreAll();
+      throw err;
+    });
+  }
+
   // html2canvas doesn't support the CSS `filter` property at all, so a plain page raster
   // straight out of it silently drops the photocopier effect off every filtered piece -- they
   // come back in full, un-photocopied colour.
@@ -2989,8 +3079,10 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       requestAnimationFrame(function(){
         waitForImages(page).then(function(){
           setTimeout(function(){
-            withPhotocopyFiltersBaked(function(){
-              return html2canvas(page, { backgroundColor: "#ffffff", scale: 2.5, useCORS: true });
+            withObjectFitCoverBaked(page, function(){
+              return withPhotocopyFiltersBaked(function(){
+                return html2canvas(page, { backgroundColor: "#ffffff", scale: 2.5, useCORS: true });
+              });
             }).then(resolve).catch(reject);
           }, 60); // small settle delay for fonts after images are ready
         });
