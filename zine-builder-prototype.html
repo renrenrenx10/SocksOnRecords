@@ -3011,7 +3011,24 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     // unbaked, which *can* capture the CSS filter, but html2canvas doesn't support CSS `filter` at
     // all, so it comes out in plain, un-photocopied colour instead.
     function bakeAttempt(div){
+      // This div carries its own rotation as a CSS `transform: rotate()` (the rotate handle sets
+      // it directly on the piece's .el wrapper, which is what gets passed in here). html2canvas
+      // bakes that transform into the pixels it captures -- so for a tilted piece, `sub` below is
+      // already a rotated raster, sized to the ROTATED bounding box (bigger, and a different
+      // aspect ratio than the div's own unrotated box). The overlay built from it is then
+      // appended as a plain child of this SAME div further down in bakeOne(), and that div still
+      // has its rotate() transform applied, so the browser rotates the (already rotated) overlay
+      // a second time -- while also force-fitting the oversized rotated-bbox raster into the
+      // overlay's inset:0/width:100%/height:100% box, which is sized for the div's unrotated
+      // dimensions. The combination skews the piece and leaves a grey halo where the padding
+      // around the rotated capture doesn't correspond to any real content. Capturing with the
+      // rotation temporarily zeroed out avoids all of that: the raster comes back flat and
+      // correctly sized, and the still-rotated outer div applies the rotation exactly once,
+      // normally, through ordinary CSS inheritance, once the flat overlay is back inside it.
+      var origTransform = div.style.transform;
+      div.style.transform = "none";
       return html2canvas(div, { backgroundColor: null, scale: 3, useCORS: true }).then(function(sub){
+        div.style.transform = origTransform;
         var filterCanvas = document.createElement("canvas");
         filterCanvas.width = sub.width;
         filterCanvas.height = sub.height;
@@ -3019,6 +3036,9 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
         fctx.filter = "url(#copier)";
         fctx.drawImage(sub, 0, 0);
         return filterCanvas.toDataURL("image/png"); // throws SecurityError on a tainted canvas
+      }).catch(function(err){
+        div.style.transform = origTransform;
+        throw err;
       });
     }
     function retryThroughProxy(div){
