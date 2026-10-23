@@ -215,19 +215,15 @@
       if(e.key === "ArrowLeft") pageFlip.flipPrev();
     });
 
-    // Mobile browsers often report stale viewport dimensions for a moment right after a
-    // rotation (while their own address-bar/toolbar is still animating away), so rebuild
-    // again a little later on orientationchange rather than trusting the first resize.
-    var resizeTimer = null;
-    function scheduleBuild(delay){
-      clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(build, delay);
-    }
-    window.addEventListener("resize", function(){ scheduleBuild(200); });
-    window.addEventListener("orientationchange", function(){
-      scheduleBuild(80);
-      setTimeout(build, 450); // second pass once the browser chrome has settled
-    });
+    // build() fully tears the flipbook down and recreates it (the "fixed" sizing mode this
+    // library uses can't resize itself live) -- rebuilding on every resize/orientationchange
+    // meant rotating a phone blanked the screen for the length of that teardown, twice in a
+    // row (the original code deliberately rebuilt a second time ~450ms later because mobile
+    // browsers report stale viewport dimensions for a moment right after a rotation). Sizing
+    // once at load and leaving it fixed for the rest of the session avoids that entirely. The
+    // trade-off is a reader left open in one orientation/size won't reflow if the viewport
+    // genuinely changes shape afterward (an actual desktop browser-window resize, say) -- a
+    // reload picks up the new size, same as any other "fixed" page.
   }
 })();
 </script>
