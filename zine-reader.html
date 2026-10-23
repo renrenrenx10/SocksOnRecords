@@ -294,6 +294,46 @@
       if(e.key === "ArrowLeft") pageFlip.flipPrev();
     });
 
+    // The page-flip library's default behaviour lets a plain tap/click anywhere on the book turn
+    // the page, with no drag distance required -- so a tap that misses a link's invisible hotspot
+    // by even a pixel falls through onto the book canvas underneath and flips instantly. The
+    // library has a setting for this (disableFlipByClick), but it turned out to also gate the
+    // library's own flipNext()/flipPrev() methods internally -- the exact ones our prev/next
+    // buttons and arrow keys call -- so turning it on silently broke button/keyboard navigation
+    // too (confirmed by testing).
+    //
+    // Instead: the library's own userStop(point, true) resets its internal "mid gesture" state
+    // AND skips the flip/fold it would otherwise do -- it's the library's own way of cancelling a
+    // gesture cleanly. (Blocking the DOM event instead, with stopPropagation, was tried first and
+    // broke the library's own bookkeeping -- it never got to reset isUserTouch, so the NEXT tap
+    // inherited stale state from the one we'd blocked and mis-fired. Calling userStop ourselves
+    // avoids that entirely.) We track pointer gestures that start on the book canvas ourselves,
+    // and when one ends without moving past the library's own swipe threshold (i.e. it was a tap,
+    // not a swipe), call userStop(_, true) BEFORE the library's own listener gets to run (hence
+    // capture:true, so ours always fires first) -- its own listener then finds isUserTouch already
+    // false and does nothing. A real swipe moves past the threshold well before release, so it's
+    // never touched by this and works exactly as before; our own buttons and arrow keys call
+    // flipNext()/flipPrev() directly and never go through this pointer-tracking path at all, so
+    // they're unaffected either way.
+    var BOOK_TAP_SWIPE_THRESHOLD = 30; // matches the library's own default swipeDistance setting
+    var bookPointerStart = null;
+    function onBookPointerDown(e){
+      if(!flipbookEl.contains(e.target)) return;
+      var p = e.touches ? e.touches[0] : e;
+      bookPointerStart = { x: p.clientX, y: p.clientY };
+    }
+    function onBookPointerUp(e){
+      if(!bookPointerStart) return;
+      var p = e.changedTouches ? e.changedTouches[0] : e;
+      var moved = Math.hypot(p.clientX - bookPointerStart.x, p.clientY - bookPointerStart.y);
+      bookPointerStart = null;
+      if(moved < BOOK_TAP_SWIPE_THRESHOLD && pageFlip) pageFlip.userStop({ x: 0, y: 0 }, true);
+    }
+    window.addEventListener("mousedown", onBookPointerDown, true);
+    window.addEventListener("touchstart", onBookPointerDown, true);
+    window.addEventListener("mouseup", onBookPointerUp, true);
+    window.addEventListener("touchend", onBookPointerUp, true);
+
     // build() fully tears the flipbook down and recreates it (the "fixed" sizing mode this
     // library uses can't resize itself live) -- rebuilding on every resize/orientationchange
     // meant rotating a phone blanked the screen for the length of that teardown, twice in a
