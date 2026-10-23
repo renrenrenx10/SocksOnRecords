@@ -303,6 +303,28 @@
     // trade-off is a reader left open in one orientation/size won't reflow if the viewport
     // genuinely changes shape afterward (an actual desktop browser-window resize, say) -- a
     // reload picks up the new size, same as any other "fixed" page.
+
+    // The link overlay is a different story, though: it's position:fixed and placed from a
+    // getBoundingClientRect() snapshot taken only when the book's own "changeState" event fires
+    // (see syncLinkOverlay above). On a phone, the browser's own address bar hiding/showing as
+    // the page is touched shifts the visual viewport without the book ever flipping -- nothing
+    // tells the overlay to re-measure, so its invisible hotspots can silently drift away from
+    // the artwork they're supposed to sit on, making a tap land on the book underneath instead
+    // (which the library may then read as the start of a swipe). Re-run just the lightweight
+    // position sync (never a rebuild) on resize/orientation/scroll so the hotspots stay glued
+    // to the page regardless of why the viewport moved.
+    var resyncTimer = null;
+    function scheduleOverlayResync(){
+      if(resyncTimer) clearTimeout(resyncTimer);
+      resyncTimer = setTimeout(function(){ resyncTimer = null; syncLinkOverlay(); }, 60);
+    }
+    window.addEventListener("resize", scheduleOverlayResync);
+    window.addEventListener("orientationchange", scheduleOverlayResync);
+    window.addEventListener("scroll", scheduleOverlayResync, { passive: true });
+    if(window.visualViewport){
+      window.visualViewport.addEventListener("resize", scheduleOverlayResync);
+      window.visualViewport.addEventListener("scroll", scheduleOverlayResync);
+    }
   }
 })();
 </script>
