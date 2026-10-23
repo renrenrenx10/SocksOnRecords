@@ -470,6 +470,23 @@ body:not(.authed) #app{display:none}
   </div>
 </div>
 
+<div id="linkPanel" class="sheet">
+  <div class="drawerHead">
+    <strong>Link</strong>
+    <button id="linkClose">Close</button>
+  </div>
+  <div class="drawerBody">
+    <p class="drawerHint">Makes this piece clickable in the published reader -- tapping it on the live site opens this link. It won't do anything in the exported PDF image itself, only on the web reader page.</p>
+    <div class="ctl">
+      <input type="text" id="linkInput" placeholder="https://socksonrecords.uk/..." autocomplete="off">
+    </div>
+    <div class="ctl" style="margin-top:8px">
+      <button id="linkSaveBtn" type="button">Save link</button>
+      <button id="linkRemoveBtn" type="button" class="danger">Remove link</button>
+    </div>
+  </div>
+</div>
+
 <div id="crosswordPanel" class="sheet">
   <div class="drawerHead">
     <strong>Crossword generator</strong>
@@ -505,6 +522,7 @@ body:not(.authed) #app{display:none}
       <li>Change a piece's text size (S–XXL), font and colour (invert), and replace a photo any time.</li>
       <li>Turn the photocopier harshness up or down for the whole page, or keep one piece "clean" while the rest gets copied.</li>
       <li>Reorder layers front-to-back, delete a piece, and pick the paper.</li>
+      <li>Select any piece and tap "Add link" to make it clickable in the published web reader (a URL, e.g. a Bandcamp page or a page on the Socks On site) — works on a styled label/button piece or an existing photo or bit of art as an invisible tap-spot. Only works on the live reader page, not in the exported PDF image itself.</li>
       <li>Add pages, switch between them, reorder them, and give each one a title. Group pages into issues, like folders.</li>
       <li>Edit two facing pages as a spread (the "⇄" button next to a page in the Pages list) so an image or headline can run across the gutter — drag a piece past its own edge and it'll spill onto the facing page too.</li>
       <li>Everyone signed in can see every page.</li>
@@ -1284,7 +1302,8 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   var stickerPanel = document.getElementById("stickerPanel");
   var qrPanel = document.getElementById("qrPanel");
   var comicPanel = document.getElementById("comicPanel");
-  var panels = [drawer, aboutPanel, pagesPanel, layersPanel, gigPanel, releasePanel, crosswordPanel, stickerPanel, qrPanel, comicPanel];
+  var linkPanel = document.getElementById("linkPanel");
+  var panels = [drawer, aboutPanel, pagesPanel, layersPanel, gigPanel, releasePanel, crosswordPanel, stickerPanel, qrPanel, comicPanel, linkPanel];
   function openPanel(panel){
     panels.forEach(function(p){ p.classList.remove("open"); });
     panel.classList.add("open");
@@ -1309,6 +1328,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   document.getElementById("stickerClose").addEventListener("click", closeDrawer);
   document.getElementById("addQrBtn").addEventListener("click", function(){ openQrPanel(null); });
   document.getElementById("qrClose").addEventListener("click", closeDrawer);
+  document.getElementById("linkClose").addEventListener("click", closeDrawer);
   document.getElementById("addComicGridBtn").addEventListener("click", function(){ openComicPanel(null); });
   document.getElementById("comicClose").addEventListener("click", closeDrawer);
   backdrop.addEventListener("click", closeDrawer);
@@ -1453,6 +1473,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       font: shape ? shape.font : null,
       size: "M",
       inverted: false,
+      linkUrl: null, // optional -- makes this piece clickable in the published reader
       z: ++zTop
     }, opts||{});
     els.push(e);
@@ -2022,6 +2043,11 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     filterBtn.textContent = e.filtered ? "Keep this one clean" : "Photocopy this one";
     filterBtn.addEventListener("click", function(){ snapshotUndo(); e.filtered = !e.filtered; updateDiv(e); renderSelbar(); });
     selbar.appendChild(filterBtn);
+
+    var linkBtn = document.createElement("button");
+    linkBtn.textContent = e.linkUrl ? "Edit link ✓" : "Add link";
+    linkBtn.addEventListener("click", function(){ openLinkPanel(e); });
+    selbar.appendChild(linkBtn);
 
     var tiltBtn = document.createElement("button");
     tiltBtn.textContent = Math.abs(e.rot) < 0.05 ? "Tilt it" : "Reroll tilt";
@@ -2594,6 +2620,44 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       scheduleSave();
     } else {
       addEl("qr", Object.assign({}, ADD_DEFAULTS.qr, { qrUrl: text }));
+    }
+    closeDrawer();
+  });
+
+  // --- link (any piece can be made clickable in the published reader) -----------------------
+  var linkEditingId = null;
+  var linkInput = document.getElementById("linkInput");
+  var linkRemoveBtn = document.getElementById("linkRemoveBtn");
+  function openLinkPanel(existing){
+    linkEditingId = existing.id;
+    linkInput.value = existing.linkUrl || "";
+    linkRemoveBtn.style.display = existing.linkUrl ? "" : "none";
+    openPanel(linkPanel);
+    linkInput.focus();
+  }
+  document.getElementById("linkSaveBtn").addEventListener("click", function(){
+    var text = linkInput.value.trim();
+    if(!text){ linkInput.focus(); return; }
+    // a bare domain/path like "socksonrecords.uk/..." is a very easy typo to make and silently
+    // produces a dead relative link in the reader (it'd try to open it relative to the reader's
+    // own page) -- nudge it into an absolute URL rather than rejecting it outright
+    if(!/^https?:\/\//i.test(text) && !/^mailto:/i.test(text)){ text = "https://" + text; }
+    var e = linkEditingId && byId(linkEditingId);
+    if(e){
+      snapshotUndo();
+      e.linkUrl = text;
+      renderSelbar();
+      scheduleSave();
+    }
+    closeDrawer();
+  });
+  linkRemoveBtn.addEventListener("click", function(){
+    var e = linkEditingId && byId(linkEditingId);
+    if(e){
+      snapshotUndo();
+      e.linkUrl = null;
+      renderSelbar();
+      scheduleSave();
     }
     closeDrawer();
   });

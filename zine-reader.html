@@ -24,6 +24,14 @@
   #stage{ flex:1 1 auto; position:relative; display:flex; align-items:center; justify-content:center; overflow:hidden; }
   #flipbook{ box-shadow:0 20px 60px rgba(0,0,0,.6); }
   #flipbook canvas, #flipbook img{ width:100%; height:100%; object-fit:contain; display:block; background:#fff; }
+  /* Positioned to exactly cover whichever page(s) the flipbook currently shows (see
+     syncLinkOverlay() in the script). Hidden during the flip animation -- the page-flip library
+     draws everything to a single <canvas> with a curling/perspective effect mid-flip, so a flat
+     positioned link would be in the wrong place (or over the wrong page) for the length of that
+     animation; it only matches reality once a page has settled. */
+  #linkOverlay{ position:fixed; pointer-events:none; display:none; z-index:3; }
+  #linkOverlay a{ position:absolute; display:block; pointer-events:auto; cursor:pointer;
+    -webkit-tap-highlight-color:rgba(255,255,255,.15); }
   #status{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
     flex-direction:column; gap:14px; text-align:center; padding:30px; }
   #status p{ max-width:360px; color:#bbb; font-size:14px; line-height:1.5; margin:0; }
@@ -45,6 +53,7 @@
   </div>
   <div id="stage">
     <div id="flipbook" hidden></div>
+    <div id="linkOverlay"></div>
     <div id="status">
       <div class="spinner" id="spinner"></div>
       <p id="statusText">Loading issue…</p>
@@ -104,11 +113,23 @@
         }
         if(row.title){ issueTitleEl.textContent = row.title; }
         statusText.textContent = "Rendering pages…";
-        renderPdfToFlipbook(row.pdf_url);
+        // Pull each page's link hotspots alongside the PDF. The builder exports PDF pages in the
+        // same page_order-ascending sequence it edits them in (pagesInIssue() / exportIssuePdf()),
+        // so sorting this query the same way lines array index N here up 1:1 with PDF page N+1 --
+        // no page id/number needs to travel through the PDF itself. A failed or empty fetch here
+        // just means no pages are clickable; it should never block the zine itself from opening.
+        sb.from("zine_pages").select("elements").eq("issue_number", n).order("page_order", { ascending: true })
+          .then(function(pagesRes){
+            var pageLinks = (!pagesRes.error && pagesRes.data ? pagesRes.data : []).map(function(p){
+              return (p.elements || []).filter(function(el){ return el && el.linkUrl; })
+                .map(function(el){ return { x: el.x, y: el.y, w: el.w, h: el.h, url: el.linkUrl }; });
+            });
+            renderPdfToFlipbook(row.pdf_url, pageLinks);
+          });
       });
   }
 
-  function renderPdfToFlipbook(url){
+  function renderPdfToFlipbook(url, pageLinks){
     pdfjsLib.getDocument(url).promise.then(function(pdf){
       var pageCount = pdf.numPages;
       var images = [];
@@ -140,7 +161,7 @@
       chain.then(function(){
         statusEl.classList.add("hidden");
         flipbookEl.hidden = false;
-        startFlipbook(images);
+        startFlipbook(images, pageLinks);
       }).catch(function(err){
         console.error(err);
         fail("Something went wrong rendering this issue.");
@@ -156,8 +177,9 @@
   // (preserving the 210/297 ratio, fitted to whatever room is actually available) shows each page
   // whole. Fixed mode doesn't resize itself, so on window resize we tear down and rebuild at the
   // new size rather than trying to reflow in place.
-  function startFlipbook(images){
+  function startFlipbook(images, pageLinks){
     var stage = document.getElementById("stage");
+    var linkOverlay = document.getElementById("linkOverlay");
     var ratio = 210/297; // A4 portrait
     var pageFlip = null;
 
@@ -187,6 +209,61 @@
       nextBtn.disabled = cur >= total-1;
     }
 
+    // Link hotspots are an absolutely-positioned overlay drawn on top of the flipbook, not part
+    // of the page images themselves -- the library renders every page onto one <canvas> (see the
+    // isolated test that mapped this out: getOrientation()/getCurrentPageIndex() against the real
+    // page-flip@2.0.7 build), so there's no per-page DOM element to attach a link to directly.
+    // Confirmed mapping: in single-page ("portrait") mode the current index is the one visible
+    // page; in two-page ("landscape") spread mode the current index is the LEFT page and index+1
+    // is the right page, each occupying exactly half of .stf__wrapper's own on-screen box. That
+    // box only reflects reality while the book is settled -- mid-flip the library curls the page
+    // across the canvas with a perspective transform a flat overlay can't follow, so the overlay
+    // is hidden for the length of any "flipping" state and only shown/repositioned once the
+    // library reports "read" again.
+    function hideLinkOverlay(){ linkOverlay.style.display = "none"; }
+    // Called both directly (e.g. after build()) and as the library's "changeState" event handler.
+    // IMPORTANT: when called as that event handler, don't trust pageFlip.getState() -- the library
+    // fires "changeState" with the new state as the event's own data BEFORE it updates its internal
+    // state field, so a synchronous getState() call from inside the handler still reads the OLD
+    // state one step behind (confirmed by tracing the vendored library's setState()/trigger() code).
+    // Prefer the event's own state value when we have it; only fall back to getState() for a direct,
+    // non-event call.
+    function syncLinkOverlay(stateEvent){
+      var state = (stateEvent && stateEvent.data) ? stateEvent.data : (pageFlip && pageFlip.getState());
+      if(!pageFlip || !pageLinks || pageLinks.length === 0){ hideLinkOverlay(); return; }
+      if(state !== "read"){ hideLinkOverlay(); return; }
+      var wrapper = flipbookEl.querySelector(".stf__wrapper");
+      if(!wrapper){ hideLinkOverlay(); return; }
+      var r = wrapper.getBoundingClientRect();
+      var spread = pageFlip.getOrientation() === "landscape";
+      var slots = spread ? 2 : 1;
+      var total = pageFlip.getPageCount();
+      var idx = pageFlip.getCurrentPageIndex();
+      var html = "";
+      for(var slot=0; slot<slots; slot++){
+        var pageIndex = idx + slot;
+        if(pageIndex < 0 || pageIndex >= total) continue;
+        var links = pageLinks[pageIndex];
+        if(!links || links.length === 0) continue;
+        var offsetPct = slot * (100/slots);
+        links.forEach(function(link){
+          var left = offsetPct + (link.x / slots);
+          var width = link.w / slots;
+          html += '<a href="' + escapeHtml(link.url) + '" target="_blank" rel="noopener noreferrer" ' +
+            'style="left:' + left + '%; top:' + link.y + '%; width:' + width + '%; height:' + link.h + '%;"></a>';
+        });
+      }
+      linkOverlay.innerHTML = html;
+      linkOverlay.style.left = r.left + "px";
+      linkOverlay.style.top = r.top + "px";
+      linkOverlay.style.width = r.width + "px";
+      linkOverlay.style.height = r.height + "px";
+      linkOverlay.style.display = html ? "block" : "none";
+    }
+    function escapeHtml(s){
+      return String(s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    }
+
     function build(){
       var wasOpen = pageFlip ? pageFlip.getCurrentPageIndex() : 0;
       if(pageFlip){ try{ pageFlip.destroy(); }catch(err){} }
@@ -203,8 +280,10 @@
       });
       pageFlip.loadFromImages(images);
       pageFlip.on("flip", updateNav);
+      pageFlip.on("changeState", syncLinkOverlay);
       if(wasOpen > 0 && pageFlip.flip) pageFlip.flip(wasOpen);
       updateNav();
+      syncLinkOverlay();
     }
     build();
 
