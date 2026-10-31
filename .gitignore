@@ -1,1 +1,5 @@
 data/crawl/cache/ 
+
+# working files, not part of the site
+/issues/
+/data/tmpcmp/
